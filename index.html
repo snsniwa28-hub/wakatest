@@ -139,21 +139,27 @@
             tableContainer.className = 'overflow-x-auto';
             
             const table = document.createElement('table');
-            table.className = 'min-w-full divide-y divide-gray-200';
+            table.className = 'min-w-full';
             table.innerHTML = `
-                <thead class="bg-gray-100">
+                <thead class="hidden sm:table-header-group bg-gray-100">
                     <tr>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">コード/表示</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">エラー内容</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">対処方法</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200">
+                <tbody class="sm:divide-y sm:divide-gray-200">
                     ${errorData[category].map(err => `
-                        <tr class="error-row">
-                            <td class="px-4 py-3 whitespace-nowrap font-mono text-sm">${err.code}</td>
-                            <td class="px-4 py-3 whitespace-nowrap text-sm">${err.message}</td>
-                            <td class="px-4 py-3 text-sm">${err.details}</td>
+                        <tr class="error-row block sm:table-row mb-4 sm:mb-0 border sm:border-0 rounded-lg sm:rounded-none overflow-hidden shadow sm:shadow-none">
+                            <td class="px-4 py-3 block sm:table-cell font-mono text-sm border-b sm:border-none">
+                                <span class="font-bold text-gray-600 sm:hidden">コード/表示: </span>${err.code}
+                            </td>
+                            <td class="px-4 py-3 block sm:table-cell text-sm border-b sm:border-none">
+                                <span class="font-bold text-gray-600 sm:hidden">エラー内容: </span>${err.message}
+                            </td>
+                            <td class="px-4 py-3 block sm:table-cell text-sm">
+                                <span class="font-bold text-gray-600 sm:hidden">対処方法: </span>${err.details}
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -232,6 +238,8 @@
 
 </body>
 </html>
+
+
 
 
 
