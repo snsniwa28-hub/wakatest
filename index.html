@@ -3,120 +3,341 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>パチンコ店 タスク割り振り表</title>
+    <title>開閉店タスク割り振りBOT</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
         /* Noto Sans JPをUIの基本フォントに設定 */
         body {
             font-family: 'Noto Sans JP', 'Inter', sans-serif;
-            background-color: #f8f8f8; /* 明るい背景 */
-            color: #333; /* 濃いめのテキスト色 */
+            background-color: #f9fafb; /* Tailwind gray-50 */
+            color: #1f2937; /* Tailwind gray-900 */
         }
 
-        /* ★見出し系に墨っぽいフォントを適用 */
-        h1, .section-title, .tab-button {
-            font-family: 'Yuji Syuku', 'Noto Sans JP', serif;
-            font-weight: 400; /* Yuji Syuku は 400 のみなので太字指定を解除 */
+        /* ★タイトル */
+        h1.main-title {
+            font-weight: 700; /* bold */
+            color: #1f2937; /* gray-900 */
+            letter-spacing: -0.025em; /* tracking-tight */
         }
 
-        /* ★タイトル専用のエフェクト */
-        h1.title-effect {
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3); /* 影を追加 */
-            font-size: 3.25rem; /* 4xl (36px) と 5xl (48px) の中間より大きめ */
-        }
-
-        /* カスタムスタイル */
+        /* ★タブデザイン */
         .tab-button {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            font-weight: 500; /* medium */
+            font-size: 0.95rem;
+            padding: 0.625rem 1rem; /* py-2.5 px-4 */
+            border-radius: 0.375rem; /* rounded-md */
             transition: all 0.2s ease-in-out;
-            border-bottom: 3px solid transparent;
-            color: #6b7280; /* Gray-500 */
+            color: #4b5563; /* Gray-700 */
+            border: 2px solid transparent;
+            white-space: nowrap; /* タブ名を折り返さない */
         }
 
         .tab-button.active {
-            border-bottom-color: #2563eb; /* Blue-600 */
-            color: #1f2937; /* Gray-900 */
-            font-weight: 600; /* こちらは可読性のためNoto Sans JPの太字を適用 */
+            background-color: #ffffff;
+            color: #4f46e5; /* Indigo-600 */
+            font-weight: 600; /* semibold */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-sm */
+        }
+        .tab-button:not(.active):hover {
+            background-color: #e5e7eb; /* Gray-200 */
+        }
+        /* スマホでタブがはみ出ないように */
+        .tab-container {
+            display: flex;
+            background-color: #f3f4f6; /* gray-100 */
+            border-radius: 0.5rem; /* rounded-lg */
+            padding: 0.375rem; /* p-1.5 */
+            max-width: 100%;
+            overflow-x: auto; /* スマホで横スクロール可能に */
         }
 
-        /* フォーム共通 */
-        .form-input, .task-select, .time-select {
+        /* ★セクションタイトル */
+        .section-title {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            font-weight: 600; /* semibold */
+            font-size: 1.25rem; /* xl */
+            color: #1f2937; /* Gray-900 */
+            padding: 1rem 1.5rem; /* p-4 md:p-6 */
+            border-bottom: 1px solid #e5e7eb; /* border-gray-200 */
+        }
+
+        /* ★スタッフ追加ボタン（トリガー） */
+        .add-staff-trigger {
+            display: block;
+            width: 100%;
+            background-color: #4f46e5; /* Indigo-600 */
+            color: #ffffff;
+            padding: 0.625rem 1rem; /* py-2.5 px-4 */
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: background-color 0.15s ease-in-out;
+            white-space: nowrap;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+        .add-staff-trigger:hover {
+            background-color: #4338ca; /* Indigo-700 */
+        }
+
+        /* ★カスタムプルダウン（トリガーボタン） */
+        .custom-select-trigger {
+            display: block;
+            width: 100%;
             background-color: #ffffff;
-            color: #333;
-            border: 1px solid #d1d5db; /* Gray-300 */
-            border-radius: 0.375rem; /* rounded-md */
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
             padding: 0.5rem 0.75rem;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
+            text-align: left;
+            position: relative;
+            cursor: pointer;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+            min-height: 38px; /* フォーム入力と高さを合わせる */
+            word-wrap: break-word; /* 長いタスク名を折り返す */
             background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 width%3D%2220%22 height%3D%2220%22 fill%3D%22%236B7280%22 viewBox%3D%220 0 20 20%22%3E%3Cpath d%3D%22M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z%22%2F%3E%3C%2Fsvg%3E");
             background-repeat: no-repeat;
             background-position: right 0.5rem center;
             background-size: 1.5em;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
         }
-        .form-input { /* テキスト入力欄は矢印なし */
-             background-image: none;
+        .custom-select-trigger:focus {
+            border-color: #4f46e5;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+        /* プレースホルダー（未選択時）の色 */
+        .custom-select-trigger.placeholder {
+            color: #6b7280; /* Gray-500 */
         }
 
-        .form-input:focus, .task-select:focus, .time-select:focus {
-            border-color: #2563eb;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        /* ★カスタムドロップダウン（選択肢リスト） */
+        .custom-select-options {
+            position: fixed; /* 画面基準で中央に */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-height: 80vh; /* 高さを制限 */
+            width: 90vw; /* スマホでの幅 */
+            max-width: 400px; /* PCでの最大幅 */
+            overflow-y: auto;
+            z-index: 100;
+            display: none; /* JSで切り替え */
         }
+        .custom-select-options.active {
+            display: block;
+        }
+        .custom-select-options div.option-item {
+            padding: 0.75rem 1.25rem; /* p-3 px-5 */
+            cursor: pointer;
+            transition: background-color 0.15s ease-in-out;
+            border-bottom: 1px solid #f3f4f6;
+            word-wrap: break-word; /* 長いタスク名を折り返す */
+        }
+        .custom-select-options div.option-item:last-child {
+            border-bottom: none;
+        }
+        .custom-select-options div.option-item:hover {
+            background-color: #eef2ff; /* Indigo-50 */
+        }
+        .custom-select-options div.option-item.selected {
+            background-color: #eef2ff;
+            font-weight: 500;
+            color: #4338ca; /* Indigo-700 */
+        }
+
+        /* ★カスタムドロップダウン用オーバーレイ (スマホ用) */
+        .custom-select-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(17, 24, 39, 0.6); /* Gray-900 with 60% opacity */
+            z-index: 90;
+            display: none; /* JSで切り替え */
+        }
+        .custom-select-overlay.active {
+            display: block;
+        }
+
+        /* ★PCではドロップダウンをトリガーの下に表示 */
+        @media (min-width: 769px) {
+            .custom-select-options {
+                position: absolute; /* PCでは絶対配置 */
+                top: 100%; /* JSで位置調整 */
+                left: 0; /* JSで位置調整 */
+                transform: none; /* 中央寄せ解除 */
+                width: auto; /* JSで幅調整 */
+                min-width: 100%;
+                max-width: none;
+                margin-top: 4px;
+                max-height: 250px; /* 高さを抑えめにする */
+            }
+             /* PCではオーバーレイ不要 */
+            .custom-select-overlay {
+                display: none !important;
+            }
+        }
+        
+        /* ★スタッフ検索モーダル */
+        .staff-search-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-height: 80vh;
+            width: 90vw;
+            max-width: 400px;
+            z-index: 100;
+            display: none;
+            overflow: hidden; /* 子要素のオーバーフローを管理 */
+            display: none;
+            flex-direction: column;
+        }
+        .staff-search-modal.active {
+            display: flex;
+        }
+        .staff-search-modal .search-input-wrapper {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .staff-search-modal .search-input {
+            width: 100%;
+            background-color: #f9fafb;
+            color: #333;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.625rem 0.75rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        .staff-search-modal .search-input:focus {
+            border-color: #4f46e5;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+        .staff-search-modal .search-results-list {
+            overflow-y: auto;
+            max-height: calc(80vh - 150px); /* ヘッダーとフッター分を引く */
+        }
+        .staff-search-modal .search-results-list div {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            transition: background-color 0.15s ease-in-out;
+            border-bottom: 1px solid #f3f4f6;
+        }
+         .staff-search-modal .search-results-list div:hover {
+             background-color: #eef2ff;
+         }
+         .staff-search-modal .search-results-list .no-results {
+             padding: 1rem;
+             color: #6b7280;
+             font-style: italic;
+         }
+        .staff-search-modal .search-footer {
+            padding: 1rem;
+            text-align: right;
+            border-top: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+        }
+        .staff-search-modal .close-button {
+            padding: 0.5rem 1rem;
+            background-color: #e5e7eb;
+            color: #374151;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .staff-search-modal .close-button:hover {
+            background-color: #d1d5db;
+        }
+
 
         /* ボタン共通 */
-        .add-button, .add-task-button {
-            background-color: #2563eb; /* Blue-600 */
+        .add-button {
+            background-color: #4f46e5; /* Indigo-600 */
             color: #ffffff;
             padding: 0.5rem 1rem;
             border-radius: 0.375rem;
             font-weight: 500;
             transition: background-color 0.15s ease-in-out;
             white-space: nowrap;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
-        .add-button:hover, .add-task-button:hover {
-            background-color: #1d4ed8; /* Blue-700 */
+        .add-button:hover {
+            background-color: #4338ca; /* Indigo-700 */
         }
+        
+        /* タスク追加ボタン */
         .add-task-button {
-            padding: 0.25rem 0.75rem;
+            background-color: transparent;
+            color: #4f46e5; /* Indigo-600 */
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
             font-size: 0.875rem;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .add-task-button:hover {
+            background-color: #eef2ff; /* Indigo-50 */
         }
 
-        .remove-button, .remove-task-button {
+        /* 削除ボタン（スタッフ） */
+        .remove-button {
             background-color: transparent;
-            color: #ef4444; /* Red-500 */
-            border: 1px solid #ef4444;
+            color: #9ca3af; /* Gray-400 */
+            border: none;
             border-radius: 9999px; /* rounded-full */
             width: 28px;
             height: 28px;
+            font-size: 1.5rem; /* 記号を大きく */
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease-in-out;
+            padding-bottom: 3px; /* &times; の位置調整 */
+        }
+        .remove-button:hover {
+            background-color: #fee2e2; /* Red-100 */
+            color: #dc2626; /* Red-600 */
+        }
+        
+        /* 削除ボタン（タスク） */
+        .remove-task-button {
+            background-color: transparent;
+            color: #9ca3af; /* Gray-400 */
+            border: none;
+            border-radius: 9999px; /* rounded-full */
+            width: 24px;
+            height: 24px;
             font-size: 1.25rem;
             line-height: 1;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             transition: all 0.15s ease-in-out;
-            padding-bottom: 2px; /* for &times; centering */
-        }
-        .remove-button:hover {
-            background-color: #ef4444;
-            color: #ffffff;
-        }
-        .remove-task-button {
-            width: 24px;
-            height: 24px;
-            font-size: 1rem;
-            color: #6b7280; /* Gray-500 */
-            border: 1px solid #9ca3af; /* Gray-400 */
+            padding-bottom: 2px;
         }
          .remove-task-button:hover {
-            background-color: #6b7280;
-            color: #ffffff;
+            background-color: #e5e7eb; /* Gray-200 */
+            color: #374151; /* Gray-800 */
         }
 
 
@@ -126,47 +347,43 @@
             border-collapse: separate;
             border-spacing: 0;
             background-color: #ffffff;
-            border-radius: 0.5rem;
-            overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
         .task-table thead {
-            background-color: #e5e7eb; /* Gray-100 */
+            background-color: #f9fafb; /* Gray-50 */
         }
 
         .task-table th,
         .task-table td {
-            padding: 0.75rem 1rem;
+            padding: 0.75rem 1.5rem; /* パディングを左右に広げる (p-6相当) */
             text-align: left;
             border-bottom: 1px solid #e5e7eb; /* Gray-200 */
             vertical-align: middle;
         }
         
         .task-table th {
-            font-weight: 600;
+            font-weight: 500; /* medium */
             color: #4b5563; /* Gray-700 */
             text-transform: uppercase;
-            font-size: 0.875rem; /* sm */
-        }
-        
-        .task-table tbody tr:hover {
-            background-color: #f9fafb; /* Gray-50 */
+            font-size: 0.75rem; /* xs */
+            letter-spacing: 0.05em; /* tracking-wider */
         }
         
         /* スタッフ行のスタイル */
         .staff-row td {
-            border-bottom-width: 2px; /* スタッフの区切りを太く */
-            border-bottom-color: #d1d5db; /* Gray-300 */
+            /* スタッフ行の最初の行はボーダーを通常に */
         }
+        
         /* タスク行のスタイル */
         .task-row td {
             padding-top: 0.5rem;
             padding-bottom: 0.5rem;
-            border-bottom: 1px dashed #e5e7eb; /* Gray-200 */
+            border-bottom: 1px solid #f3f4f6; /* Gray-100 (薄く) */
         }
+        /* JS側で :last-child が適用される想定 */
         .task-row:last-child td {
-             border-bottom: 2px solid #d1d5db; /* スタッフの最後のタスク行 */
+             /* スタッフの最後のタスク行のボーダーを濃くして区切り線にする */
+             border-bottom: 1px solid #d1d5db; /* Gray-300 */
         }
         .task-row .task-label {
             text-align: right;
@@ -174,41 +391,78 @@
             color: #6b7280;
             padding-right: 0.5rem;
         }
-
-
-        .section-title {
-            color: #1f2937; /* Gray-900 */
-            border-left-color: #2563eb; /* Blue-600 */
-        }
         
-        .time-select {
-            padding: 0.5rem 0.25rem; /* 小さめのパディング */
-            font-size: 0.875rem; /* text-sm */
-        }
-
-        /* ★あいまい検索の結果表示用 */
-        .search-results {
-            position: absolute;
-            top: 100%; /* 入力欄のすぐ下に表示 */
-            left: 0;
-            right: 0;
+        /* ★サマリーテーブル (タイムライン) */
+        .timeline-container {
+            width: 100%;
+            overflow-x: auto; /* 横スクロールを許可 */
             background-color: #ffffff;
-            border: 1px solid #d1d5db; /* Gray-300 */
-            border-top: none;
-            border-radius: 0 0 0.375rem 0.375rem; /* 下側だけ角丸 */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            max-height: 200px; /* 高すぎないように */
-            overflow-y: auto;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            border: 1px solid #e5e7eb;
+        }
+        .timeline-table {
+             width: 100%;
+             min-width: 1000px; /* 横スクロールが発生するように最小幅を指定 */
+             border-collapse: collapse;
+        }
+         .timeline-table th, .timeline-table td {
+            border: 1px solid #e5e7eb; /* 罫線 */
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            height: 50px;
+         }
+         .timeline-table thead th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #4b5563;
+            min-width: 100px; /* 時間セルの最小幅 */
+            position: sticky; /* ヘッダーを固定 */
+            top: 0;
             z-index: 10;
-        }
-        .search-results div {
-            padding: 0.75rem 1rem;
-            cursor: pointer;
-            transition: background-color 0.15s ease-in-out;
-        }
-        .search-results div:hover {
-            background-color: #f3f4f6; /* Gray-100 */
-        }
+         }
+         .timeline-table tbody th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+            min-width: 120px; /* スタッフ名セルの最小幅 */
+            text-align: left;
+            padding-left: 1rem;
+            position: sticky; /* スタッフ名を固定 */
+            left: 0;
+            z-index: 5;
+         }
+         .timeline-table td {
+            background-color: #f9fafb; /* 空き時間の色 */
+            color: #6b7280;
+            font-size: 0.75rem;
+            vertical-align: middle;
+         }
+         .timeline-table td.task-cell {
+            background-color: #eef2ff; /* Indigo-50 */
+            color: #3730a3; /* Indigo-800 */
+            font-weight: 500;
+            font-size: 0.875rem;
+            text-align: left;
+            vertical-align: top;
+            padding: 0.5rem;
+            word-wrap: break-word;
+            overflow: hidden;
+            line-height: 1.4;
+         }
+         .timeline-table td.task-cell.overlap {
+            background-color: #fee2e2; /* Red-100 */
+            color: #991b1b; /* Red-800 */
+            font-weight: 700;
+         }
+
+         .summary-table .no-tasks {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+            font-style: italic;
+         }
         
         /* 削除確認モーダル */
         .modal-overlay {
@@ -217,19 +471,121 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(17, 24, 39, 0.6); /* Gray-900 with 60% opacity */
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 50;
+            backdrop-filter: blur(4px);
         }
         .modal-content {
             background-color: #ffffff;
-            padding: 1.5rem;
-            border-radius: 0.5rem;
+            padding: 1.5rem; /* p-6 */
+            border-radius: 0.5rem; /* rounded-lg */
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            max-width: 400px;
+            max-width: 28rem; /* max-w-md */
             width: 90%;
+        }
+
+        /* ★スマホ用レスポンシブテーブル (カード型) */
+        @media (max-width: 768px) {
+            .task-table thead {
+                display: none; /* スマホではヘッダーを非表示 */
+            }
+            .task-table tbody, .task-table tr, .task-table td {
+                display: block;
+                width: 100%;
+            }
+            .task-table tr {
+                border-bottom: 2px solid #e5e7eb; /* カード間の区切り */
+                margin-bottom: 1rem;
+                border-radius: 0.5rem;
+                overflow: hidden; /* 角丸を効かせるため */
+                box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            }
+             .task-table tr:last-child {
+                margin-bottom: 0;
+             }
+            .task-table td {
+                padding: 0.75rem 1rem; /* パディング調整 */
+                border-bottom: 1px solid #f3f4f6;
+                text-align: right; /* 値を右寄せ */
+                position: relative;
+                padding-left: 40%; /* ラベル用のスペース */
+                min-height: 54px; /* 高さを確保 */
+                display: flex;
+                align-items: center;
+                justify-content: flex-end; /* 右寄せ */
+            }
+            .task-table td:last-child {
+                border-bottom: none;
+            }
+            .task-table td:before {
+                content: attr(data-label); /* data-label属性を表示 */
+                position: absolute;
+                left: 1rem;
+                width: calc(40% - 1.5rem);
+                text-align: left;
+                font-weight: 500;
+                color: #4b5563; /* Gray-700 */
+                font-size: 0.875rem;
+            }
+            
+            /* スタッフ名（1行目）*/
+            .staff-row td:first-child {
+                padding-left: 1rem;
+                text-align: left;
+                background-color: #f9fafb; /* Gray-50 */
+                font-size: 1.125rem; /* text-lg */
+                justify-content: space-between;
+                min-height: 60px;
+            }
+            .staff-row td:first-child:before {
+                content: none;
+            }
+
+             /* タスク追加ボタン（2行目以降の1列目） */
+            .task-row td.task-label {
+                padding-left: 1rem;
+                text-align: center;
+                justify-content: center; /* 中央寄せ */
+                background-color: #fafafa;
+            }
+            .task-row td.task-label:before {
+                content: none;
+            }
+            .task-row:last-child td {
+                border-bottom: none; /* 最後のタスク行の最後のセルのボーダーを消す */
+            }
+            
+            /* カスタムプルダウンボタンの調整 */
+            .custom-select-trigger {
+                width: 100%; /* 幅を最大に */
+            }
+            
+            /* 削除ボタン（タスク）のセル */
+             .task-table td[data-label="操作"] {
+                justify-content: center;
+                background-color: #fafafa;
+             }
+             
+             /* ★サマリーテーブルのスマホ対応 */
+             .timeline-table {
+                min-width: 800px; /* スマホでも最小幅を確保 */
+             }
+             .timeline-table thead th {
+                 min-width: 80px;
+                 font-size: 0.75rem;
+                 padding: 0.5rem 0.25rem;
+             }
+             .timeline-table tbody th {
+                 min-width: 100px;
+                 font-size: 0.875rem;
+             }
+             .timeline-table td.task-cell {
+                 font-size: 0.75rem;
+                 line-height: 1.3;
+             }
         }
 
     </style>
@@ -240,19 +596,24 @@
 
         <!-- ヘッダー -->
         <header class="text-center mb-10">
-            <h1 class="title-effect md:text-6xl text-gray-900 tracking-wide">
-                パチンコ店 タスク割り振り表
+            <!-- ★ タイトル変更 -->
+            <h1 class="main-title text-4xl md:text-5xl">
+                開閉店タスク割り振りBOT
             </h1>
         </header>
         
-        <!-- タブ -->
-        <div class="mb-8 border-b border-gray-200">
-            <nav class="flex -mb-px space-x-8">
-                <button id="tab-open" class="tab-button active text-lg py-3 px-1" onclick="showTab('open')">
+        <!-- ★タブ (HTML構造とクラスを変更) -->
+        <div class="mb-8">
+            <nav class="tab-container">
+                <button id="tab-open" class="tab-button active flex-1" onclick="showTab('open')">
                     開店作業 (07:00 - 10:00)
                 </button>
-                <button id="tab-close" class="tab-button text-lg py-3 px-1" onclick="showTab('close')">
+                <button id="tab-close" class="tab-button flex-1" onclick="showTab('close')">
                     閉店作業 (22:50 - 23:30)
+                </button>
+                <!-- ★「割振り確認」タブを追加 -->
+                <button id="tab-summary" class="tab-button flex-1" onclick="showTab('summary')">
+                    割振り確認
                 </button>
             </nav>
         </div>
@@ -262,166 +623,201 @@
             <!-- 開店作業タブ -->
             <div id="content-open">
                 
-                <section class="mb-10">
-                    <h2 class="text-2xl font-semibold section-title mb-5 border-l-4 pl-4">
-                        社員・早番
-                    </h2>
-                    <!-- ★スタッフ追加フォーム (検索入力) -->
-                    <div class="mb-4 flex space-x-2 relative">
-                        <input type="text" id="add-staff-name-early" 
-                               class="form-input flex-grow" 
-                               placeholder="--- 社員を検索・選択 ---"
-                               oninput="filterStaff('add-staff-name-early', 'results-early', 'early')"
-                               onfocus="filterStaff('add-staff-name-early', 'results-early', 'early')"
-                               onclick="event.stopPropagation()"
-                               autocomplete="off">
-                        <button onclick="addStaff('early', 'add-staff-name-early', 'results-early')" class="add-button">追加</button>
-                        <div id="results-early" class="search-results hidden"></div> <!-- 結果表示用 -->
-                    </div>
-                    <!-- スタッフ一覧テーブル -->
-                    <div class="rounded-lg shadow-md overflow-hidden">
-                        <table class="task-table">
-                            <thead>
-                                <tr>
-                                    <th class="w-1/4">スタッフ名</th>
-                                    <th class="w-1/6">開始</th>
-                                    <th class="w-1/6">終了</th>
-                                    <th class="w-2/5">担当タスク</th>
-                                    <th class="w-1/12"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="staff-list-open-early">
-                                <!-- スタッフ行はJSで描画 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                <!-- ★カード型デザインに変更 -->
+                <div class="bg-white border border-gray-200 rounded-lg shadow-lg mb-10 overflow-hidden">
+                    <section>
+                        <h2 class="section-title">
+                            社員・早番
+                        </h2>
+                        <!-- ★スタッフ追加フォーム (モーダル起動ボタンに変更) -->
+                        <div class="p-4 md:p-6 border-b border-gray-200">
+                             <button class="add-staff-trigger" onclick="showStaffSearchModal('early', 'employees')">
+                                + 社員・早番を追加
+                            </button>
+                        </div>
+                        <!-- スタッフ一覧テーブル (コンテナを追加) -->
+                        <div class="overflow-x-auto">
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-1/12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-open-early">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
 
-                <section>
-                    <h2 class="text-2xl font-semibold section-title mb-5 border-l-4 pl-4">
-                        早番アルバイト
-                    </h2>
-                    <!-- ★スタッフ追加フォーム (検索入力) -->
-                    <div class="mb-4 flex space-x-2 relative">
-                        <input type="text" id="add-staff-name-late" 
-                               class="form-input flex-grow" 
-                               placeholder="--- 早番アルバイトを検索・選択 ---"
-                               oninput="filterStaff('add-staff-name-late', 'results-late', 'late')"
-                               onfocus="filterStaff('add-staff-name-late', 'results-late', 'late')"
-                               onclick="event.stopPropagation()"
-                               autocomplete="off">
-                        <button onclick="addStaff('late', 'add-staff-name-late', 'results-late')" class="add-button">追加</button>
-                        <div id="results-late" class="search-results hidden"></div> <!-- 結果表示用 -->
-                    </div>
-                    <div class="rounded-lg shadow-md overflow-hidden">
-                        <table class="task-table">
-                            <thead>
-                                <tr>
-                                    <th class="w-1/4">スタッフ名</th>
-                                    <th class="w-1/6">開始</th>
-                                    <th class="w-1/6">終了</th>
-                                    <th class="w-2/5">担当タスク</th>
-                                    <th class="w-1/12"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="staff-list-open-late">
-                                <!-- スタッフ行はJSで描画 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                <!-- ★カード型デザインに変更 -->
+                <div class="bg-white border border-gray-200 rounded-lg shadow-lg mb-10 overflow-hidden">
+                    <section>
+                        <h2 class="section-title">
+                            早番アルバイト
+                        </h2>
+                         <!-- ★スタッフ追加フォーム (モーダル起動ボタンに変更) -->
+                        <div class="p-4 md:p-6 border-b border-gray-200">
+                            <button class="add-staff-trigger" onclick="showStaffSearchModal('late', 'alba_early')">
+                                + 早番アルバイトを追加
+                            </button>
+                        </div>
+                        <!-- スタッフ一覧テーブル (コンテナを追加) -->
+                        <div class="overflow-x-auto">
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-1/12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-open-late">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
             </div>
 
             <!-- 閉店作業タブ -->
             <div id="content-close" class="hidden">
                 
+                <!-- ★カード型デザインに変更 -->
+                <div class="bg-white border border-gray-200 rounded-lg shadow-lg mb-10 overflow-hidden">
+                    <section>
+                        <h2 class="section-title">
+                            社員・遅番
+                        </h2>
+                         <!-- ★スタッフ追加フォーム (モーダル起動ボタンに変更) -->
+                        <div class="p-4 md:p-6 border-b border-gray-200">
+                             <button class="add-staff-trigger" onclick="showStaffSearchModal('closing_employee', 'employees')">
+                                + 社員・遅番を追加
+                            </button>
+                        </div>
+                        <!-- スタッフ一覧テーブル (コンテナを追加) -->
+                        <div class="overflow-x-auto">
+                            <table class="task-table">
+                               <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-1/12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-close-employee">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ★カード型デザインに変更 -->
+                <div class="bg-white border border-gray-200 rounded-lg shadow-lg mb-10 overflow-hidden">
+                    <section>
+                        <h2 class="section-title">
+                            アルバイト・遅番
+                        </h2>
+                         <!-- ★スタッフ追加フォーム (モーダル起動ボタンに変更) -->
+                        <div class="p-4 md:p-6 border-b border-gray-200">
+                            <button class="add-staff-trigger" onclick="showStaffSearchModal('closing_alba', 'alba_late')">
+                                + アルバイト・遅番を追加
+                            </button>
+                        </div>
+                        <!-- スタッフ一覧テーブル (コンテナを追加) -->
+                        <div class="overflow-x-auto">
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-1/12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-close-alba">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+            
+            <!-- ★「割振り確認」タブのコンテンツ -->
+            <div id="content-summary" class="hidden">
                 <section class="mb-10">
-                    <h2 class="text-2xl font-semibold section-title mb-5 border-l-4 pl-4">
-                        社員・遅番
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-5 border-l-4 border-indigo-500 pl-4">
+                        開店作業 タイムライン
                     </h2>
-                    <!-- ★スタッフ追加フォーム (検索入力) -->
-                    <div class="mb-4 flex space-x-2 relative">
-                        <input type="text" id="add-staff-name-closing_employee" 
-                               class="form-input flex-grow" 
-                               placeholder="--- 社員を検索・選択 ---"
-                               oninput="filterStaff('add-staff-name-closing_employee', 'results-closing_employee', 'closing_employee')"
-                               onfocus="filterStaff('add-staff-name-closing_employee', 'results-closing_employee', 'closing_employee')"
-                               onclick="event.stopPropagation()"
-                               autocomplete="off">
-                        <button onclick="addStaff('closing_employee', 'add-staff-name-closing_employee', 'results-closing_employee')" class="add-button">追加</button>
-                        <div id="results-closing_employee" class="search-results hidden"></div> <!-- 結果表示用 -->
-                    </div>
-                    <div class="rounded-lg shadow-md overflow-hidden">
-                        <table class="task-table">
-                           <thead>
-                                <tr>
-                                    <th class="w-1/4">スタッフ名</th>
-                                    <th class="w-1/6">開始</th>
-                                    <th class="w-1/6">終了</th>
-                                    <th class="w-2/5">担当タスク</th>
-                                    <th class="w-1/12"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="staff-list-close-employee">
-                                <!-- スタッフ行はJSで描画 -->
-                            </tbody>
-                        </table>
+                    <!-- ★タイムラインコンテナに変更 -->
+                    <div id="summary-open-container" class="timeline-container">
+                        <!-- タイムラインはJSで描画 -->
                     </div>
                 </section>
-
-                <section>
-                    <h2 class="text-2xl font-semibold section-title mb-5 border-l-4 pl-4">
-                        アルバイト・遅番
+                
+                <section class="mb-10">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-5 border-l-4 border-indigo-500 pl-4">
+                        閉店作業 タイムライン
                     </h2>
-                    <!-- ★スタッフ追加フォーム (検索入力) -->
-                    <div class="mb-4 flex space-x-2 relative">
-                        <input type="text" id="add-staff-name-closing_alba" 
-                               class="form-input flex-grow" 
-                               placeholder="--- 遅番アルバイトを検索・選択 ---"
-                               oninput="filterStaff('add-staff-name-closing_alba', 'results-closing_alba', 'closing_alba')"
-                               onfocus="filterStaff('add-staff-name-closing_alba', 'results-closing_alba', 'closing_alba')"
-                               onclick="event.stopPropagation()"
-                               autocomplete="off">
-                        <button onclick="addStaff('closing_alba', 'add-staff-name-closing_alba', 'results-closing_alba')" class="add-button">追加</button>
-                        <div id="results-closing_alba" class="search-results hidden"></div> <!-- 結果表示用 -->
-                    </div>
-                    <div class="rounded-lg shadow-md overflow-hidden">
-                        <table class="task-table">
-                            <thead>
-                                <tr>
-                                    <th class="w-1/4">スタッフ名</th>
-                                    <th class="w-1/6">開始</th>
-                                    <th class="w-1/6">終了</th>
-                                    <th class="w-2/5">担当タスク</th>
-                                    <th class="w-1/12"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="staff-list-close-alba">
-                                <!-- スタッフ行はJSで描画 -->
-                            </tbody>
-                        </table>
+                     <!-- ★タイムラインコンテナに変更 -->
+                    <div id="summary-close-container" class="timeline-container">
+                        <!-- タイムラインはJSで描画 -->
                     </div>
                 </section>
             </div>
+            
         </main>
 
     </div>
 
-    <!-- 削除確認モーダル -->
+    <!-- 削除確認モーダル (スタイル微調整) -->
     <div id="delete-modal" class="modal-overlay hidden">
         <div class="modal-content">
-            <h3 class="text-xl font-semibold mb-4">削除の確認</h3>
-            <p id="delete-modal-message" class="mb-6">本当に削除しますか？</p>
+            <h3 class="text-xl font-semibold mb-4 text-gray-900">削除の確認</h3>
+            <p id="delete-modal-message" class="mb-6 text-gray-700">本当に削除しますか？</p>
             <div class="flex justify-end space-x-3">
-                <button onclick="cancelDelete()" class="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition">
+                <button onclick="cancelDelete()" class="px-4 py-2 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition shadow-sm">
                     キャンセル
                 </button>
-                <button id="confirm-delete-button" onclick="confirmDelete()" class="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 transition">
+                <button id="confirm-delete-button" onclick="confirmDelete()" class="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 transition shadow-sm">
                     削除する
                 </button>
             </div>
         </div>
     </div>
+    
+    <!-- ★カスタムドロップダウン用のコンテナ -->
+    <div id="custom-select-overlay" class="custom-select-overlay" onclick="closeAllDropdowns()"></div>
+    <div id="custom-select-options-container" class="custom-select-options">
+        <!-- 選択肢はJSで動的に挿入される -->
+    </div>
+    
+    <!-- ★スタッフ検索モーダル -->
+    <div id="staff-search-modal" class="staff-search-modal">
+        <div class="search-input-wrapper">
+            <input type="text" id="staff-search-input" class="search-input" placeholder="スタッフ名を検索...">
+        </div>
+        <div id="staff-search-results" class="search-results-list">
+            <!-- 検索結果はJSで描画 -->
+        </div>
+        <div class="search-footer">
+            <button class="close-button" onclick="closeStaffSearchModal()">閉じる</button>
+        </div>
+    </div>
+
 
     <script>
         // --- 設定データ ---
@@ -447,13 +843,13 @@
         const taskLists = {
             open: [
                 "金銭計数",
-                "近隣店チラシチェック、外販出し、岡持返却、新聞交換",
+                "近隣店チェック・外販", // ← 変更
                 "空調、配電系",
                 "抽選準備",
                 "抽選",
                 "台チェック",
                 "販促確認",
-                "全員9時から朝礼10分"
+                "朝礼" // ← 変更
             ],
             close: [
                 "カード点滅つぶし（営業後できるだけ）",
@@ -463,10 +859,11 @@
                 "引継ぎ記載",
                 "施錠確認",
                 "飲み残し",
-                "工具箱チェック",
-                "（営業中）島下確認",
-                "（営業中）30π手補給",
-                "（営業中）カード点滅つぶし"
+                "工具箱チェック"
+                // ↓ 削除
+                // "（営業中）島下確認",
+                // "（営業中）30π手補給",
+                // "（営業中）カード点滅つぶし"
             ]
         };
         
@@ -482,6 +879,9 @@
         
         // 削除確認用の一時保存
         let deleteInfo = { type: null, sectionKey: null, staffIndex: null, taskIndex: null };
+        
+        // ★スタッフ検索モーダル用の一時保存
+        let staffSearchInfo = { sectionKey: null, masterListKey: null };
 
         // 時間スロットの事前生成
         const openTimeSlots = generateTimeSlots('07:00', '10:00', 15);
@@ -492,12 +892,18 @@
         document.addEventListener('DOMContentLoaded', () => {
             updateStaffLists();
 
-            // 外側クリックで検索結果を閉じる
+            // 外側クリックで検索結果やドロップダウンを閉じる
             document.addEventListener('click', (event) => {
-                const resultsBoxes = document.querySelectorAll('.search-results');
-                resultsBoxes.forEach(box => {
-                    box.classList.add('hidden');
-                });
+                // ★カスタムドロップダウンを閉じる
+                const dropdownContainer = document.getElementById('custom-select-options-container');
+                if (dropdownContainer.classList.contains('active') && !dropdownContainer.contains(event.target) && !event.target.closest('.custom-select-trigger')) {
+                    closeAllDropdowns();
+                }
+            });
+            
+            // ★スタッフ検索モーダルの入力イベント
+            document.getElementById('staff-search-input').addEventListener('input', (e) => {
+                 filterStaff(e.target.value);
             });
         });
 
@@ -506,90 +912,184 @@
          */
         function showTab(tabName) {
             const isOpen = tabName === 'open';
+            const isClose = tabName === 'close';
+            const isSummary = tabName === 'summary';
+            
             document.getElementById('content-open').classList.toggle('hidden', !isOpen);
-            document.getElementById('content-close').classList.toggle('hidden', isOpen);
+            document.getElementById('content-close').classList.toggle('hidden', !isClose);
+            document.getElementById('content-summary').classList.toggle('hidden', !isSummary);
+            
             document.getElementById('tab-open').classList.toggle('active', isOpen);
-            document.getElementById('tab-close').classList.toggle('active', !isOpen);
-        }
-
-        /**
-         * sectionKeyからマスターリストのキーを取得するヘルパー
-         */
-        function getMasterListKey(sectionKey) {
-            switch(sectionKey) {
-                case 'early':
-                case 'closing_employee':
-                    return 'employees';
-                case 'late':
-                    return 'alba_early';
-                case 'closing_alba':
-                    return 'alba_late';
-                default:
-                    return 'employees';
+            document.getElementById('tab-close').classList.toggle('active', isClose);
+            document.getElementById('tab-summary').classList.toggle('active', isSummary);
+            
+            // ★サマリータブが選ばれたら中身を生成
+            if (isSummary) {
+                generateSummaryView();
             }
         }
         
+        // --- ★カスタムドロップダウン関数群 ---
+
         /**
-         * あいまい検索フィルター
+         * 開いているすべてのカスタムドロップダウンを閉じる
          */
-        function filterStaff(inputId, resultsId, sectionKey) {
-            event.stopPropagation(); // ★クリックイベントの伝播を停止
-            const inputEl = document.getElementById(inputId);
-            const resultsEl = document.getElementById(resultsId);
-            const query = inputEl.value.toLowerCase().trim();
+        function closeAllDropdowns() {
+            document.getElementById('custom-select-options-container').classList.remove('active');
+            document.getElementById('custom-select-overlay').classList.remove('active');
+            document.getElementById('custom-select-options-container').innerHTML = ''; // 中身を空にする
+        }
+
+        /**
+         * カスタムドロップダウンの選択肢を表示
+         */
+        function showCustomDropdown(event, type, sectionKey, staffIndex, taskIndex, field) {
+            event.stopPropagation();
+            closeAllDropdowns(); // 他を閉じる
+
+            const container = document.getElementById('custom-select-options-container');
+            const overlay = document.getElementById('custom-select-overlay');
             
-            const masterListKey = getMasterListKey(sectionKey);
-            const masterList = masterStaffList[masterListKey];
+            const currentValue = staffList[sectionKey][staffIndex].tasks[taskIndex][field];
+            let optionsHtml = '';
 
-            // 他の検索結果を隠す
-            document.querySelectorAll('.search-results').forEach(box => {
-                if (box.id !== resultsId) box.classList.add('hidden');
+            let optionsList = [];
+            let placeholder = '';
+
+            if (type === 'time') {
+                const isOpening = sectionKey.includes('early') || sectionKey.includes('late');
+                optionsList = isOpening ? openTimeSlots : closeTimeSlots;
+                placeholder = '--';
+                // プレースホルダー（未選択）の選択肢
+                optionsHtml += `<div class="option-item ${currentValue === '' ? 'selected' : ''}" onclick="selectCustomValue(event, '${sectionKey}', ${staffIndex}, ${taskIndex}, '${field}', '', true)">${placeholder}</div>`;
+            } else { // type === 'task'
+                const isOpening = sectionKey.includes('early') || sectionKey.includes('late');
+                optionsList = isOpening ? taskLists.open : taskLists.close;
+                placeholder = '--- タスクを選択 ---';
+                 // プレースホルダー（未選択）の選択肢
+                optionsHtml += `<div class="option-item ${currentValue === '' ? 'selected' : ''}" onclick="selectCustomValue(event, '${sectionKey}', ${staffIndex}, ${taskIndex}, '${field}', '', true)">${placeholder}</div>`;
+            }
+
+            // 実際の選択肢
+            optionsList.forEach(optionValue => {
+                const escapedValue = optionValue.replace(/'/g, "\\'"); // 'エスケープ
+                optionsHtml += `<div class="option-item ${currentValue === optionValue ? 'selected' : ''}" onclick="selectCustomValue(event, '${sectionKey}', ${staffIndex}, ${taskIndex}, '${field}', '${escapedValue}', true)">${optionValue}</div>`;
             });
+            
+            container.innerHTML = optionsHtml;
 
+            // PCの場合はトリガーの真下に配置する
+            if (window.innerWidth >= 769) {
+                const triggerEl = event.currentTarget;
+                const rect = triggerEl.getBoundingClientRect();
+                container.style.position = 'absolute'; // fixedから変更
+                container.style.top = `${rect.bottom + window.scrollY}px`;
+                container.style.left = `${rect.left + window.scrollX}px`;
+                container.style.transform = 'none';
+                container.style.width = `${triggerEl.offsetWidth}px`; // 幅を合わせる
+                container.style.maxWidth = 'none';
+                container.style.maxHeight = '250px';
+            } else {
+                // スマホの場合は中央に固定
+                container.style.position = 'fixed';
+                container.style.top = '50%';
+                container.style.left = '50%';
+                container.style.transform = 'translate(-50%, -50%)';
+                container.style.width = '90vw';
+                container.style.maxWidth = '400px';
+                container.style.maxHeight = '80vh';
+                overlay.classList.add('active'); // スマホのみオーバーレイ表示
+            }
+
+            container.classList.add('active');
+        }
+
+        /**
+         * カスタムドロップダウンで値を選択
+         */
+        function selectCustomValue(event, sectionKey, staffIndex, taskIndex, field, value, shouldUpdateLists = false) {
+            event.stopPropagation();
+            handleChange(sectionKey, staffIndex, taskIndex, field, value); // データを更新
+            closeAllDropdowns();
+            
+            if (shouldUpdateLists) {
+                updateStaffLists(); // UIを再描画してトリガーのテキストを更新
+            }
+        }
+        
+        // --- ★スタッフ検索モーダル関数群 ---
+        
+        /**
+         * スタッフ検索モーダルを表示
+         */
+        function showStaffSearchModal(sectionKey, masterListKey) {
+            staffSearchInfo = { sectionKey, masterListKey };
+            document.getElementById('staff-search-input').value = ''; // 入力をリセット
+            filterStaff(''); // 全リストを表示
+            
+            document.getElementById('staff-search-modal').classList.add('active');
+            document.getElementById('custom-select-overlay').classList.add('active'); // オーバーレイを流用
+            document.getElementById('staff-search-input').focus();
+        }
+        
+        /**
+         * スタッフ検索モーダルを閉じる
+         */
+        function closeStaffSearchModal() {
+            document.getElementById('staff-search-modal').classList.remove('active');
+            document.getElementById('custom-select-overlay').classList.remove('active');
+            staffSearchInfo = { sectionKey: null, masterListKey: null };
+        }
+
+        /**
+         * あいまい検索フィルター（モーダル内）
+         */
+        function filterStaff(query) {
+            const { masterListKey } = staffSearchInfo;
+            if (!masterListKey) return;
+            
+            const resultsEl = document.getElementById('staff-search-results');
+            const masterList = masterStaffList[masterListKey];
+            const lowerQuery = query.toLowerCase().trim();
+            
             resultsEl.innerHTML = '';
             
             const filteredList = masterList.filter(staffName => 
-                staffName.toLowerCase().includes(query)
+                staffName.toLowerCase().includes(lowerQuery)
             );
 
             if (filteredList.length === 0) {
-                resultsEl.innerHTML = `<div class="p-3 text-gray-500 italic">該当者なし</div>`;
+                resultsEl.innerHTML = `<div class="no-results">該当者なし</div>`;
             } else {
                 filteredList.forEach(staffName => {
                     // ' を含む名前に対応
                     const escapedName = staffName.replace(/'/g, "\\'");
-                    resultsEl.innerHTML += `<div onclick="selectStaff('${inputId}', '${resultsId}', '${escapedName}')">${staffName}</div>`;
+                    resultsEl.innerHTML += `<div onclick="selectStaff('${escapedName}')">${staffName}</div>`;
                 });
             }
-            resultsEl.classList.remove('hidden');
         }
 
         /**
-         * 検索結果からスタッフを選択
+         * 検索結果からスタッフを選択（モーダル内）
          */
-        function selectStaff(inputId, resultsId, staffName) {
-            event.stopPropagation(); // ★
-            document.getElementById(inputId).value = staffName;
-            document.getElementById(resultsId).classList.add('hidden');
+        function selectStaff(staffName) {
+            const { sectionKey } = staffSearchInfo;
+            if (sectionKey) {
+                addStaff(sectionKey, staffName);
+            }
+            closeStaffSearchModal();
         }
+
+        // --- スタッフ・タスク管理ロジック ---
 
         /**
          * スタッフをリストに追加します。
          */
-        function addStaff(sectionKey, inputId, resultsId) {
-            const inputEl = document.getElementById(inputId);
-            const staffName = inputEl.value;
-
+        function addStaff(sectionKey, staffName) {
             if (staffName === "") return;
             
-            const masterListKey = getMasterListKey(sectionKey);
-            if (!masterStaffList[masterListKey].includes(staffName)) {
-                return; // マスターにない名前は追加しない
-            }
-            
+            // 既にリストにいないかチェック
             if (staffList[sectionKey].find(staff => staff.name === staffName)) {
-                inputEl.value = ""; 
-                document.getElementById(resultsId).classList.add('hidden');
                 return; // 既に追加済み
             }
 
@@ -597,8 +1097,6 @@
                 name: staffName,
                 tasks: [{ start: "", end: "", task: "" }]
             });
-            inputEl.value = "";
-            document.getElementById(resultsId).classList.add('hidden');
             updateStaffLists();
         }
 
@@ -667,30 +1165,22 @@
          * 全てのスタッフリストのHTMLを再描画します。
          */
         function updateStaffLists() {
-            populateStaffList('staff-list-open-early', 'early', taskLists.open, openTimeSlots);
-            populateStaffList('staff-list-open-late', 'late', taskLists.open, openTimeSlots);
-            populateStaffList('staff-list-close-employee', 'closing_employee', taskLists.close, closeTimeSlots);
-            populateStaffList('staff-list-close-alba', 'closing_alba', taskLists.close, closeTimeSlots);
+            populateStaffList('staff-list-open-early', 'early');
+            populateStaffList('staff-list-open-late', 'late');
+            populateStaffList('staff-list-close-employee', 'closing_employee');
+            populateStaffList('staff-list-close-alba', 'closing_alba');
         }
 
         /**
          * スタッフリストとタスク選択プルダウンを生成して配置します。
+         * (★ カスタムドロップダウン用にHTML生成ロジックを変更)
          */
-        function populateStaffList(containerId, sectionKey, tasks, timeSlots) {
+        function populateStaffList(containerId, sectionKey) {
             const container = document.getElementById(containerId);
             if (!container) return;
             
             container.innerHTML = ''; // コンテナをクリア
             
-            // タスクと時間の<option>HTMLを事前に生成
-            const taskOptions = '<option value="">--- タスクを選択 ---</option>' + tasks.map(task => 
-                `<option value="${task}">${task}</option>`
-            ).join('');
-            
-            const timeOptions = '<option value="">--</option>' + timeSlots.map(time => 
-                `<option value="${time}">${time}</option>`
-            ).join('');
-
             // staffListから該当セクションのスタッフを描画
             staffList[sectionKey].forEach((staff, staffIndex) => {
                 
@@ -698,12 +1188,21 @@
                 const staffName = staff.name.replace(/'/g, "\\'"); // 'エスケープ
 
                 staff.tasks.forEach((task, taskIndex) => {
+                    
+                    // ★トリガーボタンのテキストとクラスを決定
+                    const startText = task.start || '--';
+                    const endText = task.end || '--';
+                    const taskText = task.task || '--- タスクを選択 ---';
+                    const startClass = task.start ? '' : 'placeholder';
+                    const endClass = task.end ? '' : 'placeholder';
+                    const taskClass = task.task ? '' : 'placeholder';
+
                     if (taskIndex === 0) {
                         // 1行目 (スタッフ名 + 最初のタスク)
                         staffHtml += `
                             <tr class="staff-row">
                                 <!-- スタッフ名 -->
-                                <td class="font-medium text-gray-800">
+                                <td data-label="スタッフ名" class="font-medium text-gray-800">
                                     <div class="flex items-center justify-between">
                                         <span class="text-lg">${staff.name}</span>
                                         <button onclick="showDeleteModal('staff', '${sectionKey}', ${staffIndex})" 
@@ -712,22 +1211,22 @@
                                     </div>
                                 </td>
                                 <!-- 1行目のタスク -->
-                                <td class="w-1/6">
-                                    <select class="time-select w-full" onchange="handleChange('${sectionKey}', ${staffIndex}, ${taskIndex}, 'start', this.value)">
-                                        ${timeOptions.replace(`value="${task.start}"`, `value="${task.start}" selected`)}
-                                    </select>
+                                <td class="w-1/6" data-label="開始">
+                                    <button class="custom-select-trigger ${startClass}" onclick="showCustomDropdown(event, 'time', '${sectionKey}', ${staffIndex}, ${taskIndex}, 'start')">
+                                        ${startText}
+                                    </button>
                                 </td>
-                                <td class="w-1/6">
-                                    <select class="time-select w-full" onchange="handleChange('${sectionKey}', ${staffIndex}, ${taskIndex}, 'end', this.value)">
-                                        ${timeOptions.replace(`value="${task.end}"`, `value="${task.end}" selected`)}
-                                    </select>
+                                <td class="w-1/6" data-label="終了">
+                                    <button class="custom-select-trigger ${endClass}" onclick="showCustomDropdown(event, 'time', '${sectionKey}', ${staffIndex}, ${taskIndex}, 'end')">
+                                        ${endText}
+                                    </button>
                                 </td>
-                                <td class="w-2/5">
-                                    <select class="task-select w-full" onchange="handleChange('${sectionKey}', ${staffIndex}, ${taskIndex}, 'task', this.value)">
-                                        ${taskOptions.replace(`value="${task.task}"`, `value="${task.task}" selected`)}
-                                    </select>
+                                <td class="w-2/5" data-label="担当タスク">
+                                    <button class="custom-select-trigger ${taskClass}" onclick="showCustomDropdown(event, 'task', '${sectionKey}', ${staffIndex}, ${taskIndex}, 'task')">
+                                        ${taskText}
+                                    </button>
                                 </td>
-                                <td class="w-1/12 text-center">
+                                <td class="w-1/12 text-center" data-label="操作">
                                     <!-- 1行目でもタスク削除ボタンを配置 (タスクが2個以上の場合のみ) -->
                                     ${staff.tasks.length > 1 ? 
                                         `<button onclick="showDeleteModal('task', '${sectionKey}', ${staffIndex}, ${taskIndex})" 
@@ -739,27 +1238,27 @@
                         // 2行目以降のタスク
                         staffHtml += `
                             <tr class="task-row">
-                                <td class="task-label">
+                                <td class="task-label" data-label="スタッフ名">
                                     <button onclick="addTask('${sectionKey}', ${staffIndex})" 
                                             class="add-task-button" 
                                             title="タスクを追加">+ タスク追加</button>
                                 </td>
-                                <td class="w-1/6">
-                                    <select class="time-select w-full" onchange="handleChange('${sectionKey}', ${staffIndex}, ${taskIndex}, 'start', this.value)">
-                                        ${timeOptions.replace(`value="${task.start}"`, `value="${task.start}" selected`)}
-                                    </select>
+                                <td class="w-1/6" data-label="開始">
+                                    <button class="custom-select-trigger ${startClass}" onclick="showCustomDropdown(event, 'time', '${sectionKey}', ${staffIndex}, ${taskIndex}, 'start')">
+                                        ${startText}
+                                    </button>
                                 </td>
-                                <td class="w-1/6">
-                                    <select class="time-select w-full" onchange="handleChange('${sectionKey}', ${staffIndex}, ${taskIndex}, 'end', this.value)">
-                                        ${timeOptions.replace(`value="${task.end}"`, `value="${task.end}" selected`)}
-                                    </select>
+                                <td class="w-1/6" data-label="終了">
+                                    <button class="custom-select-trigger ${endClass}" onclick="showCustomDropdown(event, 'time', '${sectionKey}', ${staffIndex}, ${taskIndex}, 'end')">
+                                        ${endText}
+                                    </button>
                                 </td>
-                                <td class="w-2/5">
-                                    <select class="task-select w-full" onchange="handleChange('${sectionKey}', ${staffIndex}, ${taskIndex}, 'task', this.value)">
-                                        ${taskOptions.replace(`value="${task.task}"`, `value="${task.task}" selected`)}
-                                    </select>
+                                <td class="w-2/5" data-label="担当タスク">
+                                    <button class="custom-select-trigger ${taskClass}" onclick="showCustomDropdown(event, 'task', '${sectionKey}', ${staffIndex}, ${taskIndex}, 'task')">
+                                        ${taskText}
+                                    </button>
                                 </td>
-                                <td class="w-1/12 text-center">
+                                <td class="w-1/12 text-center" data-label="操作">
                                     <button onclick="showDeleteModal('task', '${sectionKey}', ${staffIndex}, ${taskIndex})" 
                                             class="remove-task-button" 
                                             title="このタスクを削除">－</button>
@@ -772,7 +1271,7 @@
                 if (staff.tasks.length === 1) {
                      staffHtml += `
                         <tr class="task-row">
-                            <td class="task-label" colspan="5">
+                            <td class="task-label" colspan="5" data-label="スタッフ名">
                                 <button onclick="addTask('${sectionKey}', ${staffIndex})" 
                                         class="add-task-button" 
                                         title="タスクを追加">+ タスク追加</button>
@@ -783,6 +1282,146 @@
                 container.innerHTML += staffHtml;
             });
         }
+        
+        // --- ★サマリー表示関数群 (タイムライン版に改修) ---
+
+        /**
+         * 割振り確認タブのサマリービューを生成・表示します。
+         */
+        function generateSummaryView() {
+            // 開店作業のサマリー
+            const openTasks = [
+                ...collectTasks(staffList.early),
+                ...collectTasks(staffList.late)
+            ];
+            const openStaff = [
+                ...new Set([
+                    ...staffList.early.map(s => s.name), 
+                    ...staffList.late.map(s => s.name)
+                ])
+            ].sort(); // スタッフ名をソート
+            document.getElementById('summary-open-container').innerHTML = 
+                createTimelineTable(openTasks, openStaff, openTimeSlots);
+
+            // 閉店作業のサマリー
+            const closeTasks = [
+                ...collectTasks(staffList.closing_employee),
+                ...collectTasks(staffList.closing_alba)
+            ];
+             const closeStaff = [
+                ...new Set([
+                    ...staffList.closing_employee.map(s => s.name), 
+                    ...staffList.closing_alba.map(s => s.name)
+                ])
+            ].sort(); // スタッフ名をソート
+             document.getElementById('summary-close-container').innerHTML = 
+                createTimelineTable(closeTasks, closeStaff, closeTimeSlots);
+        }
+
+        /**
+         * 指定されたスタッフリストから全タスクを収集します。
+         */
+        function collectTasks(staffArray) {
+            const allTasks = [];
+            staffArray.forEach(staff => {
+                staff.tasks.forEach(task => {
+                    if (task.task || task.start || task.end) { // 何かしら入力があれば
+                        allTasks.push({
+                            name: staff.name,
+                            start: task.start,
+                            end: task.end,
+                            task: task.task || 'タスク未入力'
+                        });
+                    }
+                });
+            });
+            return allTasks;
+        }
+        
+        /**
+         * タイムラインテーブルのHTMLを生成します。
+         */
+        function createTimelineTable(tasks, staffNames, timeSlots) {
+            if (staffNames.length === 0) {
+                 return `<div class="bg-white rounded-lg shadow p-6 text-center text-gray-500 italic">割り当てられたタスクはありません。</div>`;
+            }
+            
+            // --- 1. ヘッダー行 (時間軸) ---
+            let headerHtml = '<tr><th>スタッフ</th>';
+            timeSlots.forEach(time => {
+                headerHtml += `<th>${time}</th>`;
+            });
+            headerHtml += '</tr>';
+            
+            // --- 2. ボディ行 (スタッフごと) ---
+            let bodyHtml = '';
+            staffNames.forEach(name => {
+                bodyHtml += `<tr><th>${name}</th>`;
+                
+                // そのスタッフのタスクを時間順にソート
+                const staffTasks = tasks
+                    .filter(t => t.name === name && t.start && t.end)
+                    .sort((a, b) => a.start.localeCompare(b.start));
+
+                // タイムスロットをループしてセルを埋める
+                let i = 0;
+                while (i < timeSlots.length) {
+                    const currentTime = timeSlots[i];
+                    
+                    // 現在の時間が開始時間と一致するタスクを探す
+                    const task = staffTasks.find(t => t.start === currentTime);
+                    
+                    if (task) {
+                        // --- 2a. タスクセルを生成 ---
+                        
+                        // このタスクが何スロット分かを計算
+                        const startIndex = i;
+                        const endIndex = timeSlots.indexOf(task.end);
+                        
+                        // 終了時間が不正または開始時間より前の場合は1スロット
+                        let colspan = (endIndex > startIndex) ? (endIndex - startIndex) : 1;
+                        
+                        // タスクが時間スロットの最後を超える場合は丸める
+                        if (startIndex + colspan > timeSlots.length) {
+                            colspan = timeSlots.length - startIndex;
+                        }
+
+                        // 重複チェック
+                        let overlap = false;
+                        if (i > 0) {
+                            // このタスクが、前のタスクの終了時間より前に始まっていないか
+                            const prevTask = staffTasks.find(t => t.end === currentTime);
+                            if(prevTask) overlap = true;
+                        }
+                        const overlapClass = overlap ? 'overlap' : '';
+                        
+                        bodyHtml += `<td class="task-cell ${overlapClass}" colspan="${colspan}">
+                            ${task.task}
+                            <div class="text-xs opacity-75">${task.start} - ${task.end}</div>
+                        </td>`;
+                        
+                        // ループカウンタをタスク分進める
+                        i += colspan;
+                        
+                    } else {
+                        // --- 2b. 空き時間セルを生成 ---
+                        bodyHtml += `<td></td>`;
+                        i++;
+                    }
+                }
+                bodyHtml += '</tr>';
+            });
+
+
+            // --- 3. 結合 ---
+            return `
+                <table class="timeline-table">
+                    <thead>${headerHtml}</thead>
+                    <tbody>${bodyHtml}</tbody>
+                </table>
+            `;
+        }
+
 
         /**
          * 指定された時間範囲と間隔で時間スロットの配列を生成します。
@@ -811,4 +1450,5 @@
     </script>
 </body>
 </html>
+
 
