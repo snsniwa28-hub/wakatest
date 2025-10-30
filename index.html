@@ -11,6 +11,156 @@
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     
+    <!-- ★ Firebase SDK (ここから追加) -->
+    <script type="module">
+        // Firebase SDK imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase 初期化 ---
+        // グローバル変数から設定を取得
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, auth, db;
+        let userId;
+        let unsubscribeFromTasks; // onSnapshotのリスナー解除用
+
+        // Firestoreのドキュメント参照をグローバルに定義
+        let taskDocRef;
+
+        /**
+         * Firebaseの初期化と認証、データ監視を開始
+         */
+        async function initFirebase() {
+            try {
+                // グローバル変数に設定がない場合は、フォールバック（デモ用）
+                if (Object.keys(firebaseConfig).length === 0) {
+                     console.warn("Firebase config not found. Using placeholder config (this will likely fail outside of a test environment).");
+                     // 開発用のダミー設定（インストラクションでは不要だが、ローカルテスト用）
+                     // firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "..." };
+                }
+
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); // Firestoreのデバッグログを有効化
+
+                // Firestoreのパスを定義
+                // データは全ユーザー共通（公開）のため、publicパスを使用
+                taskDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_assignments', 'today');
+
+                // 認証状態の監視
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        console.log("Firebase Auth: User is signed in.", user.uid);
+                        userId = user.uid;
+                    } else {
+                        console.log("Firebase Auth: User is signed out. Signing in...");
+                        // 認証トークンがあればそれを使用、なければ匿名認証
+                        if (initialAuthToken) {
+                            console.log("Signing in with custom token...");
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            console.log("Signing in anonymously...");
+                            await signInAnonymously(auth);
+                        }
+                        // 認証が成功すると、このonAuthStateChangedリスナーが再度呼ばれる
+                    }
+
+                    // 認証が確立したら（userIdがセットされたら）、データ監視を開始
+                    if (userId && !unsubscribeFromTasks) { // ★リスナーがまだ開始されていない場合のみ
+                        startTaskListener();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                // エラーを画面に表示（オプション）
+                const header = document.querySelector('header');
+                if(header) {
+                    header.innerHTML += `<p class="text-red-500 font-bold">データベース接続エラー</p>`;
+                }
+            }
+        }
+
+        /**
+         * Firestoreのタスク割り当てデータの監視を開始
+         */
+        function startTaskListener() {
+            // 既にリスナーがあれば解除
+            if (unsubscribeFromTasks) {
+                unsubscribeFromTasks();
+            }
+
+            console.log("Starting Firestore snapshot listener for:", taskDocRef.path);
+
+            // onSnapshotでリアルタイムのデータ変更を監視
+            unsubscribeFromTasks = onSnapshot(taskDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    console.log("Firestore data received:", docSnap.data());
+                    // 取得したデータでグローバル変数を上書き
+                    const data = docSnap.data();
+                    // staffListの各キーが存在するか確認し、なければ空配列で初期化
+                    window.staffList.early = data.early || [];
+                    window.staffList.late = data.late || [];
+                    window.staffList.closing_employee = data.closing_employee || [];
+                    window.staffList.closing_alba = data.closing_alba || [];
+
+                } else {
+                    console.log("No data found in Firestore. Using default empty list.");
+                    // データがない場合（初回など）は空で初期化
+                    window.staffList = { early: [], late: [], closing_employee: [], closing_alba: [] };
+                }
+
+                // データ更新後、現在のビューを再描画
+                // (重要: window.staffListが更新されたことをグローバルスコープに反映させる)
+                if (window.refreshCurrentView) {
+                     window.refreshCurrentView();
+                }
+
+            }, (error) => {
+                console.error("Error listening to Firestore:", error);
+            });
+        }
+
+        /**
+         * データをFirestoreに保存 (管理者がログインしている場合のみ)
+         */
+        async function saveStaffListToFirestore() {
+            // (グローバルスコープの) isLoggedIn をチェック
+            if (!window.isLoggedIn) {
+                console.log("Not logged in. Skipping save to Firestore.");
+                return;
+            }
+            if (!taskDocRef) {
+                console.error("Firestore document reference is not initialized.");
+                return;
+            }
+
+            try {
+                console.log("Saving data to Firestore...", window.staffList);
+                // (グローバルスコープの) staffList を保存
+                // JSON.stringify/parseでシリアライズ/デシリアライズを行い、
+                // undefinedなどがFirestore保存時にエラーになるのを防ぐ
+                const cleanData = JSON.parse(JSON.stringify(window.staffList));
+                await setDoc(taskDocRef, cleanData);
+                console.log("Data saved successfully.");
+            } catch (error) {
+                console.error("Error saving data to Firestore:", error);
+            }
+        }
+
+        // --- グローバルスコープに関数を公開 ---
+        // (HTMLのonclickから呼べるようにするため)
+        window.initFirebase = initFirebase;
+        window.saveStaffListToFirestore = saveStaffListToFirestore;
+
+    </script>
+    <!-- ★ Firebase SDK (ここまで追加) -->
+
     <style>
         /* モダンデザインのスタイル */
         body {
@@ -66,7 +216,7 @@
         .sub-tab-button {
              font-size: 0.875rem; /* text-sm */
              padding: 0.5rem 1rem;
-         }
+        }
 
 
         /* セクション (カード風) */
@@ -97,7 +247,7 @@
          @media (min-width: 768px) {
              .section-content {
                 padding: 1.5rem;
-           }
+            }
          }
 
         /* ボタン共通 (インディゴ) */
@@ -779,7 +929,7 @@
                         </h2>
                          <!-- ★CSVダウンロードボタンを削除 -->
                     </div>
-                     
+                    
                      <!-- ★タイムラインコンテナをPC用とスマホ用に分離 -->
                      <div id="summary-close-container">
                         <!-- PC用 (横スクロール) -->
@@ -896,12 +1046,13 @@
         
         // --- アプリケーション状態 ---
 
-        // ★管理者ログイン状態
-        let isLoggedIn = false;
+        // ★管理者ログイン状態 (グローバルスコープに変更)
+        window.isLoggedIn = false;
         const ADMIN_PASSWORD = "admin"; // ★仮パスワード (本番では変更してください)
 
-        // タスク割り振りデータ
-        let staffList = {
+        // ★タスク割り振りデータ (グローバルスコープに変更)
+        // (初期値は空。FirebaseのonSnapshotがデータをロードする)
+        window.staffList = {
             early: [],
             late: [],
             closing_employee: [],
@@ -933,7 +1084,14 @@
         // --- アプリケーションロジック ---
 
         document.addEventListener('DOMContentLoaded', () => {
+            // ★ Firebaseの初期化を実行
+            // (HTML Head内の <script type="module"> で定義)
+            if (window.initFirebase) {
+                window.initFirebase();
+            }
+
             // ★UI初期設定関数を呼ぶ
+            // (注意: この時点ではstaffListは空。FirebaseのonSnapshotがデータをロードすると再描画される)
             setupInitialView();
             
             // モーダル外クリックで閉じる
@@ -952,10 +1110,35 @@
         });
 
         /**
+         * ★現在のタブの状態に基づいてビューを再描画する
+         * (FirestoreのonSnapshotコールバックやタブ切り替え時に呼ばれる)
+         */
+        window.refreshCurrentView = function() {
+            // 現在アクティブなタブをチェック
+            const assignTab = document.getElementById('tab-assign');
+            const summaryTab = document.getElementById('tab-summary');
+
+            if (summaryTab.classList.contains('active')) {
+                // 「割振り確認」タブが表示されている場合
+                console.log("Refreshing Summary View...");
+                generateSummaryView();
+            } else if (assignTab.classList.contains('active')) {
+                // 「タスク割振り」タブが表示されている場合
+                console.log("Refreshing Assign View...");
+                updateStaffLists();
+            } else {
+                // (初期ロード時など) デフォルトの「割振り確認」を描画
+                console.log("Refreshing Default (Summary) View...");
+                generateSummaryView();
+            }
+        }
+
+
+        /**
          * ★ページ読み込み時のUI初期状態を設定
          */
         function setupInitialView() {
-            isLoggedIn = false;
+            window.isLoggedIn = false; // ★window.isLoggedIn に変更
             
             // ログイン状態に依存するUI要素
             document.getElementById('tab-assign').classList.add('hidden');
@@ -970,7 +1153,7 @@
             document.getElementById('tab-assign').classList.remove('active');
             document.getElementById('tab-summary').classList.add('active');
             
-            // 「割振り確認」タブのデータを初期描画
+            // ★「割振り確認」タブのデータを描画 (onSnapshotが呼ばれると再度更新される)
             generateSummaryView();
         }
 
@@ -979,7 +1162,7 @@
          */
         function showTab(tabName) {
             // ログインしていない場合、'assign'タブは見せない
-            if (tabName === 'assign' && !isLoggedIn) {
+            if (tabName === 'assign' && !window.isLoggedIn) { // ★window.isLoggedIn
                 console.warn("管理者としてログインしていません。");
                 return; 
             }
@@ -994,13 +1177,8 @@
             document.getElementById('tab-assign').classList.toggle('active', isAssign);
             document.getElementById('tab-summary').classList.toggle('active', !isAssign);
             
-            if (isAssign) {
-                // 「タスク割振り」タブが選ばれたら、スタッフリストを（再）描画
-                updateStaffLists(); 
-            } else {
-                // 「割振り確認」タブが選ばれたら、サマリーを再生成
-                generateSummaryView();
-            }
+            // ★タブ切り替え時に、(既にロード済みの) staffList を使ってビューを再描画
+            window.refreshCurrentView();
         }
         
         /**
@@ -1042,7 +1220,7 @@
             
             if (input === ADMIN_PASSWORD) {
                 // 認証成功
-                isLoggedIn = true;
+                window.isLoggedIn = true; // ★window.isLoggedIn
                 closeLoginModal();
                 
                 // 管理者用UIを表示
@@ -1063,6 +1241,8 @@
          * ログアウト処理
          */
         function logout() {
+            // ★isLoggedIn を false に戻す
+            window.isLoggedIn = false;
             // 初期状態に戻す
             setupInitialView();
         }
@@ -1076,7 +1256,8 @@
          */
         function openStaffSelect(sectionKey, masterListKey) {
             const masterList = masterStaffList[masterListKey];
-            const currentStaff = staffList[sectionKey].map(s => s.name);
+            // ★ window.staffList を参照
+            const currentStaff = window.staffList[sectionKey].map(s => s.name);
             const selectedStaffName = staffToAdd[sectionKey];
             
             // 既にリストにいるスタッフを除外
@@ -1088,14 +1269,14 @@
             if (options.length === 0) {
                  modalBody.innerHTML = `<div class="p-4 text-center text-gray-500">追加できるスタッフがいません。</div>`;
             } else {
-                options.forEach(name => {
-                    const isSelected = name === selectedStaffName;
-                    modalBody.innerHTML += `
-                        <div class="select-modal-option ${isSelected ? 'selected' : ''}" 
-                             onclick="selectStaff('${sectionKey}', '${name.replace(/'/g, "\\'")}')">
-                            ${name}
-                        </div>`;
-                });
+                 options.forEach(name => {
+                     const isSelected = name === selectedStaffName;
+                     modalBody.innerHTML += `
+                         <div class="select-modal-option ${isSelected ? 'selected' : ''}" 
+                              onclick="selectStaff('${sectionKey}', '${name.replace(/'/g, "\\'")}')">
+                             ${name}
+                         </div>`;
+                 });
             }
             
             document.getElementById('select-modal-title').textContent = "スタッフを選択";
@@ -1129,7 +1310,8 @@
          */
         function openTaskSelect(sectionKey, staffIndex, taskIndex, taskListName) {
             const tasks = taskLists[taskListName];
-            const currentValue = staffList[sectionKey][staffIndex].tasks[taskIndex].task;
+            // ★ window.staffList を参照
+            const currentValue = window.staffList[sectionKey][staffIndex].tasks[taskIndex].task;
             
             const modalBody = document.getElementById('select-modal-body');
             modalBody.innerHTML = `<div class="select-modal-option clear-option" onclick="selectTask('', '--- タスクを選択 ---')">--- タスクを選択 ---</div>`; // クリアオプション
@@ -1162,7 +1344,8 @@
          * 時間選択モーダルを開きます。
          */
         function openTimeSelect(sectionKey, staffIndex, taskIndex, field, timeSlotList) {
-            const currentValue = staffList[sectionKey][staffIndex].tasks[taskIndex][field];
+            // ★ window.staffList を参照
+            const currentValue = window.staffList[sectionKey][staffIndex].tasks[taskIndex][field];
             
             const modalBody = document.getElementById('select-modal-body');
             modalBody.innerHTML = `<div class="select-modal-option clear-option" onclick="selectTime('--')">--</div>`; // クリアオプション
@@ -1227,7 +1410,7 @@
             }
         }
         
-        // --- スタッフ・タスク操作 ---
+        // --- スタッフ・タスク操作 (★ Firestore保存処理を追加) ---
 
         /**
          * スタッフをリストに追加します。
@@ -1236,12 +1419,13 @@
             const staffName = staffToAdd[sectionKey];
             if (!staffName) return; // 名前が選択されていない
 
-            // 既にリストにいるか最終チェック
-            if (staffList[sectionKey].find(staff => staff.name === staffName)) {
+            // ★ window.staffList を参照
+            if (window.staffList[sectionKey].find(staff => staff.name === staffName)) {
                 return;
             }
 
-            staffList[sectionKey].push({
+            // ★ window.staffList に追加
+            window.staffList[sectionKey].push({
                 name: staffName,
                 tasks: [{ start: "", end: "", task: "" }]
             });
@@ -1252,14 +1436,21 @@
             updateSelectButton(buttonEl, buttonEl.getAttribute('data-placeholder'), true);
 
             updateStaffLists();
+
+            // ★ Firestoreに保存
+            window.saveStaffListToFirestore();
         }
 
         /**
          * 特定のスタッフにタスクを追加します。
          */
         function addTask(sectionKey, staffIndex) {
-            staffList[sectionKey][staffIndex].tasks.push({ start: "", end: "", task: "" });
+            // ★ window.staffList に追加
+            window.staffList[sectionKey][staffIndex].tasks.push({ start: "", end: "", task: "" });
             updateStaffLists();
+
+            // ★ Firestoreに保存
+            window.saveStaffListToFirestore();
         }
 
         /**
@@ -1271,7 +1462,8 @@
             const messageEl = document.getElementById('delete-modal-message');
             
             if (type === 'staff') {
-                const staffName = staffList[sectionKey][staffIndex].name;
+                // ★ window.staffList を参照
+                const staffName = window.staffList[sectionKey][staffIndex].name;
                 messageEl.textContent = `「${staffName}」さんをリストから削除します。よろしいですか？`;
             } else { // type === 'task'
                 messageEl.textContent = `このタスクを削除します。よろしいですか？`;
@@ -1294,16 +1486,22 @@
             const { type, sectionKey, staffIndex, taskIndex } = deleteInfo;
 
             if (type === 'staff') {
-                staffList[sectionKey].splice(staffIndex, 1);
+                // ★ window.staffList から削除
+                window.staffList[sectionKey].splice(staffIndex, 1);
             } else if (type === 'task') {
                 // タスクが1つの場合は削除させない（代わりにスタッフを削除させる）
-                if (staffList[sectionKey][staffIndex].tasks.length > 1) {
-                    staffList[sectionKey][staffIndex].tasks.splice(taskIndex, 1);
+                // ★ window.staffList を参照
+                if (window.staffList[sectionKey][staffIndex].tasks.length > 1) {
+                    // ★ window.staffList から削除
+                    window.staffList[sectionKey][staffIndex].tasks.splice(taskIndex, 1);
                 }
             }
             
             cancelDelete(); // モーダルを閉じる
             updateStaffLists(); // リストを再描画
+
+            // ★ Firestoreに保存
+            window.saveStaffListToFirestore();
         }
 
         /**
@@ -1311,7 +1509,12 @@
          */
         function handleChange(sectionKey, staffIndex, taskIndex, field, value) {
             try {
-                staffList[sectionKey][staffIndex].tasks[taskIndex][field] = value;
+                // ★ window.staffList を変更
+                window.staffList[sectionKey][staffIndex].tasks[taskIndex][field] = value;
+                
+                // ★ (重要) 変更が完了したタイミングで保存
+                window.saveStaffListToFirestore();
+
             } catch (e) {
                 console.error("Error updating data:", {sectionKey, staffIndex, taskIndex, field, value}, e);
             }
@@ -1321,7 +1524,8 @@
          * タスクの自動割振り (★時間設定機能追加 + バグ修正)
          */
         function autoAssignTasks(sectionKey, taskListName) {
-            const staffInGroup = staffList[sectionKey];
+            // ★ window.staffList を参照
+            const staffInGroup = window.staffList[sectionKey];
             const numStaff = staffInGroup.length;
             
             if (numStaff === 0) {
@@ -1408,6 +1612,9 @@
             }
             
             updateStaffLists();
+
+            // ★ Firestoreに保存
+            window.saveStaffListToFirestore();
         }
 
 
@@ -1433,8 +1640,8 @@
             
             const timeSlotJSON = JSON.stringify(timeSlots); // onclick用にJSON文字列化
 
-            // staffListから該当セクションのスタッフを描画
-            staffList[sectionKey].forEach((staff, staffIndex) => {
+            // ★ window.staffList から該当セクションのスタッフを描画
+            window.staffList[sectionKey].forEach((staff, staffIndex) => {
                 
                 let staffHtml = '';
                 const staffName = staff.name.replace(/'/g, "\\'"); // 'エスケープ
@@ -1542,13 +1749,13 @@
          * 「割振り確認」タブのタイムラインを生成・表示
          */
         function generateSummaryView() {
-            // 開店作業
+            // ★ window.staffList を参照
             const openTasks = [
-                ...collectTasks(staffList.early),
-                ...collectTasks(staffList.late)
+                ...collectTasks(window.staffList.early),
+                ...collectTasks(window.staffList.late)
             ];
             const openStaff = [
-                ...new Set([...staffList.early.map(s => s.name), ...staffList.late.map(s => s.name)])
+                ...new Set([...window.staffList.early.map(s => s.name), ...window.staffList.late.map(s => s.name)])
             ].sort();
             
             // ★PC用とスマホ用で生成先を変更
@@ -1560,18 +1767,19 @@
             document.getElementById('summary-open-container-mobile').innerHTML = openHtmlMobile;
             
             // 閉店作業
+            // ★ window.staffList を参照
             const closeTasks = [
-                ...collectTasks(staffList.closing_employee),
-                ...collectTasks(staffList.closing_alba)
+                ...collectTasks(window.staffList.closing_employee),
+                ...collectTasks(window.staffList.closing_alba)
             ];
              const closeStaff = [
-                ...new Set([...staffList.closing_employee.map(s => s.name), ...staffList.closing_alba.map(s => s.name)])
+                ...new Set([...window.staffList.closing_employee.map(s => s.name), ...window.staffList.closing_alba.map(s => s.name)])
             ].sort();
             
             // ★PC用とスマホ用で生成先を変更
             // PC用
             const closeHtmlDesktop = createTimelineTable(closeTasks, closeStaff, closeTimeSlots);
-            document.getElementById('summary-close-container-desktop').innerHTML = closeHtmlDesktop;
+            document.getElementById('summary-open-container-desktop').innerHTML = closeHtmlDesktop;
             // スマホ用
             const closeHtmlMobile = createTimelineListForMobile(closeTasks, closeStaff, closeTimeSlots);
             document.getElementById('summary-close-container-mobile').innerHTML = closeHtmlMobile;
@@ -1695,8 +1903,8 @@
 
             staffNames.forEach(name => {
                 const staffTasks = tasks
-                    .filter(t => t.name === name && t.start)
-                    .sort((a, b) => a.start.localeCompare(b.start)); // 開始時間でソート
+                    .filter(t => t.name === name && (t.start || t.task)) // ★タスク名だけでも表示
+                    .sort((a, b) => (a.start || '99:99').localeCompare(b.start || '99:99')); // 開始時間でソート
 
                 html += `
                     <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
@@ -1713,12 +1921,12 @@
                         const isPair = task.task.includes('2人');
                         // ★ペアタスクの色分け
                         const pairClass = isPair ? 'bg-red-50 border-l-red-400' : 'bg-indigo-50 border-l-indigo-400';
-                        const timeLabel = (task.start && task.end) ? `${task.start} - ${task.end}` : (task.start || '時間未定');
+                        const timeLabel = (task.start && task.end) ? `${task.start} - ${task.end}` : (task.start ? `${task.start} - ?` : '時間未定');
                         
                         html += `
                             <li class="px-4 py-3 ${pairClass} border-l-4">
                                 <div class="flex justify-between items-center">
-                                    <span class="font-medium text-gray-700">${task.task}</span>
+                                    <span class="font-medium text-gray-700">${task.task || '(タスク未入力)'}</span>
                                     <span class="text-sm font-mono text-gray-600">${timeLabel}</span>
                                 </div>
                             </li>
@@ -1734,12 +1942,6 @@
             return html;
         }
         // --- (ここまで追加) ---
-
-        // --- CSVエクスポート関数群 ---
-        // ★CSVダウンロード関連の関数 (exportTimelineCSV, generateTimelineCSV, downloadCSV) を削除
-        
-        // --- (ここまで追加) ---
-
 
         /**
          * 指定された時間範囲と間隔で時間スロットの配列を生成します。
@@ -1768,4 +1970,3 @@
     </script>
 </body>
 </html>
-
