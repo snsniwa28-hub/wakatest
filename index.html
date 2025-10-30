@@ -47,6 +47,7 @@
             border: 2px solid transparent;
             font-size: 0.875rem; /* text-sm */
             padding: 0.5rem 1rem;
+            white-space: nowrap; /* ★追加 */
         }
         .tab-button.active {
             background-color: #ffffff;
@@ -65,7 +66,7 @@
         .sub-tab-button {
              font-size: 0.875rem; /* text-sm */
              padding: 0.5rem 1rem;
-        }
+         }
 
 
         /* セクション (カード風) */
@@ -96,7 +97,7 @@
          @media (min-width: 768px) {
              .section-content {
                 padding: 1.5rem;
-            }
+           }
          }
 
         /* ボタン共通 (インディゴ) */
@@ -114,7 +115,7 @@
             background-color: #4338ca; /* Indigo-700 */
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
         }
-        /* 自動割振りボタン (セカンダリ) */
+        /* 自動割振り・管理者ボタン (セカンダリ) */
         .secondary-button {
             background-color: #f1f5f9; /* Gray-100 */
             color: #475569; /* Gray-600 */
@@ -158,7 +159,7 @@
          .remove-task-button:hover {
             background-color: #64748b;
             color: #ffffff;
-        }
+         }
         .add-task-button {
             background-color: #f1f5f9; /* Gray-100 */
             color: #475569; /* Gray-600 */
@@ -168,7 +169,7 @@
             border-radius: 0.375rem;
         }
         .add-task-button:hover {
-             background-color: #e2e8f0; /* Gray-200 */
+            background-color: #e2e8f0; /* Gray-200 */
         }
 
 
@@ -312,7 +313,7 @@
          .select-modal-option.clear-option {
             color: #64748b;
             font-style: italic;
-        }
+         }
         .select-modal-footer {
             padding: 1rem 1.5rem;
             border-top: 1px solid #e2e8f0;
@@ -330,7 +331,7 @@
          }
 
         
-        /* 削除確認モーダル */
+        /* 削除確認・ログインモーダル (共通) */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -428,6 +429,19 @@
 
         /* レスポンシブ (スマホ用) */
         @media (max-width: 767px) {
+            /* ★管理者ボタンを中央タブの下に移動 */
+            .admin-button-container {
+                position: static;
+                transform: none;
+                margin-top: 0.75rem; /* 12px */
+                justify-content: center;
+                display: flex;
+            }
+            .main-tab-container {
+                flex-direction: column;
+                align-items: center;
+            }
+
             .task-table {
                 display: block;
                 width: 100%;
@@ -520,14 +534,26 @@
             </h1>
         </header>
         
-        <!-- メインチブ (セグメントコントロール風) -->
-        <div class="mb-6 md:mb-8 flex justify-center">
+        <!-- メインチブ (セグメントコントロール風) と ログインボタン -->
+        <!-- ★変更: main-tab-container追加 -->
+        <div class="mb-6 md:mb-8 flex flex-col md:flex-row justify-center items-center relative main-tab-container">
             <div class="tab-container">
-                <button id="tab-assign" class="tab-button active" onclick="showTab('assign')">
+                <!-- 「タスク割振り」タブ (最初は非表示) -->
+                <button id="tab-assign" class="tab-button hidden" onclick="showTab('assign')">
                     タスク割振り
                 </button>
-                <button id="tab-summary" class="tab-button" onclick="showTab('summary')">
+                <button id="tab-summary" class="tab-button active" onclick="showTab('summary')">
                     割振り確認
+                </button>
+            </div>
+            <!-- ログイン/ログアウトボタンエリア -->
+            <!-- ★変更: admin-button-container追加, md:absolute -->
+            <div class="admin-button-container md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
+                <button id="show-login-button" class="add-button secondary-button" onclick="showLoginModal()">
+                    管理者メニュー
+                </button>
+                <button id="logout-button" class="add-button secondary-button hidden" onclick="logout()">
+                    ログアウト
                 </button>
             </div>
         </div>
@@ -535,20 +561,22 @@
 
         <!-- メインコンテンツ -->
         <main>
-            <!-- 「タスク割振り」タブのコンテンツ -->
-            <div id="content-assign" class="space-y-6 md:space-y-8">
-                <!-- サブタブ（開店・閉店） (セグメントコントロール風) -->
-                <div class="mb-6 md:mb-8 flex justify-center">
-                    <div class="tab-container">
-                        <button id="tab-open" class="tab-button sub-tab-button active" onclick="showSubTab('open')">
-                            開店作業 (07:00 - 10:00)
-                        </button>
-                        <button id="tab-close" class="tab-button sub-tab-button" onclick="showSubTab('close')">
-                            閉店作業 (22:50 - 23:30)
-                        </button>
-                    </div>
+            <!-- サブタブ（開店・閉店） (セグメントコントロール風) -->
+            <!-- ★変更: コンテナごと非表示に -->
+            <div id="sub-tab-container" class="mb-6 md:mb-8 flex justify-center hidden">
+                <div class="tab-container">
+                    <button id="tab-open" class="tab-button sub-tab-button active" onclick="showSubTab('open')">
+                        開店作業 (07:00 - 10:00)
+                    </button>
+                    <button id="tab-close" class="tab-button sub-tab-button" onclick="showSubTab('close')">
+                        閉店作業 (22:50 - 23:30)
+                    </button>
                 </div>
+            </div>
 
+            <!-- 「タスク割振り」タブのコンテンツ -->
+            <!-- ★変更: hiddenを追加 (デフォルト非表示) -->
+            <div id="content-assign" class="space-y-6 md:space-y-8 hidden">
                 <!-- 開店作業エリア -->
                 <div id="content-open">
                     <!-- カード型セクションに変更 -->
@@ -659,7 +687,7 @@
                             </div>
                             <div>
                                 <table class="task-table">
-                                   <thead>
+                                    <thead>
                                         <tr>
                                             <th class="w-1/4">スタッフ名</th>
                                             <th class="w-1/6">開始</th>
@@ -719,21 +747,27 @@
             </div>
             
             <!-- 「割振り確認」タブのコンテンツ -->
-            <div id="content-summary" class="hidden">
+            <!-- ★変更: hiddenを削除 (デフォルト表示) -->
+            <div id="content-summary" class="">
                 <section class="mb-10">
                     <!-- 見出しとボタンをフレックスボックスで横並びに -->
                     <div class="flex justify-between items-center mb-5">
                         <h2 class="section-title" style="border-color: #4f46e5;">
                             開店作業 タイムライン
                         </h2>
-                        <!-- CSVダウンロードボタンを追加 -->
-                        <button onclick="exportTimelineCSV('open')" class="add-button text-sm py-2 px-3">
-                            CSVダウンロード
-                        </button>
+                        <!-- ★CSVダウンロードボタンを削除 -->
                     </div>
-                    <!-- タイムラインコンテナに変更 -->
-                    <div id="summary-open-container" class="timeline-container">
-                        <!-- タイムラインはJSで描画 -->
+                    
+                    <!-- ★タイムラインコンテナをPC用とスマホ用に分離 -->
+                    <div id="summary-open-container">
+                        <!-- PC用 (横スクロール) -->
+                        <div id="summary-open-container-desktop" class="timeline-container hidden md:block">
+                            <!-- PC用タイムラインはJSで描画 -->
+                        </div>
+                        <!-- スマホ用 (縦リスト) -->
+                        <div id="summary-open-container-mobile" class="md:hidden">
+                            <!-- スマホ用リストはJSで描画 -->
+                        </div>
                     </div>
                 </section>
                 
@@ -743,20 +777,43 @@
                         <h2 class="section-title" style="border-color: #4f46e5;">
                             閉店作業 タイムライン
                         </h2>
-                         <!-- CSVダウンロードボタンを追加 -->
-                        <button onclick="exportTimelineCSV('close')" class="add-button text-sm py-2 px-3">
-                            CSVダウンロード
-                        </button>
+                         <!-- ★CSVダウンロードボタンを削除 -->
                     </div>
-                     <!-- タイムラインコンテナに変更 -->
-                    <div id="summary-close-container" class="timeline-container">
-                        <!-- タイムラインはJSで描画 -->
-                    </div>
+                     
+                     <!-- ★タイムラインコンテナをPC用とスマホ用に分離 -->
+                     <div id="summary-close-container">
+                        <!-- PC用 (横スクロール) -->
+                        <div id="summary-close-container-desktop" class="timeline-container hidden md:block">
+                            <!-- PC用タイムラインはJSで描画 -->
+                        </div>
+                        <!-- スマホ用 (縦リスト) -->
+                        <div id="summary-close-container-mobile" class="md:hidden">
+                            <!-- スマホ用リストはJSで描画 -->
+                        </div>
+                     </div>
                 </section>
             </div>
             
         </main>
 
+    </div>
+
+    <!-- ログインモーダル (★追加) -->
+    <div id="login-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4">管理者ログイン</h3>
+            <p class="mb-4">パスワードを入力してください。</p>
+            <input id="password-input" type="password" class="w-full p-2 border border-gray-300 rounded-md mb-2" placeholder="パスワード">
+            <p id="login-error" class="text-red-500 text-sm mb-4 hidden">パスワードが違います。</p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeLoginModal()" class="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition">
+                    キャンセル
+                </button>
+                <button onclick="checkPassword()" class="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                    ログイン
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- 削除確認モーダル -->
@@ -839,6 +896,10 @@
         
         // --- アプリケーション状態 ---
 
+        // ★管理者ログイン状態
+        let isLoggedIn = false;
+        const ADMIN_PASSWORD = "admin"; // ★仮パスワード (本番では変更してください)
+
         // タスク割り振りデータ
         let staffList = {
             early: [],
@@ -872,7 +933,8 @@
         // --- アプリケーションロジック ---
 
         document.addEventListener('DOMContentLoaded', () => {
-            updateStaffLists();
+            // ★UI初期設定関数を呼ぶ
+            setupInitialView();
             
             // モーダル外クリックで閉じる
             document.getElementById('select-modal').addEventListener('click', (event) => {
@@ -880,20 +942,63 @@
                     closeSelectModal();
                 }
             });
+            
+            // ★ログインモーダルでEnterキーを押したときの処理
+            document.getElementById('password-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    checkPassword();
+                }
+            });
         });
 
         /**
-         * メインのタブ（割振り/確認）を切り替えます。
+         * ★ページ読み込み時のUI初期状態を設定
+         */
+        function setupInitialView() {
+            isLoggedIn = false;
+            
+            // ログイン状態に依存するUI要素
+            document.getElementById('tab-assign').classList.add('hidden');
+            document.getElementById('sub-tab-container').classList.add('hidden');
+            document.getElementById('show-login-button').classList.remove('hidden');
+            document.getElementById('logout-button').classList.add('hidden');
+            
+            // デフォルトは「割振り確認」タブを表示
+            document.getElementById('content-assign').classList.add('hidden');
+            document.getElementById('content-summary').classList.remove('hidden');
+            
+            document.getElementById('tab-assign').classList.remove('active');
+            document.getElementById('tab-summary').classList.add('active');
+            
+            // 「割振り確認」タブのデータを初期描画
+            generateSummaryView();
+        }
+
+        /**
+         * ★メインのタブ（割振り/確認）を切り替えます。
          */
         function showTab(tabName) {
+            // ログインしていない場合、'assign'タブは見せない
+            if (tabName === 'assign' && !isLoggedIn) {
+                console.warn("管理者としてログインしていません。");
+                return; 
+            }
+            
             const isAssign = tabName === 'assign';
             document.getElementById('content-assign').classList.toggle('hidden', !isAssign);
             document.getElementById('content-summary').classList.toggle('hidden', isAssign);
+            
+            // ★サブタブコンテナの表示制御を追加
+            document.getElementById('sub-tab-container').classList.toggle('hidden', !isAssign);
+
             document.getElementById('tab-assign').classList.toggle('active', isAssign);
             document.getElementById('tab-summary').classList.toggle('active', !isAssign);
             
-            // 「割振り確認」タブが選ばれたら、サマリーを再生成
-            if (tabName === 'summary') {
+            if (isAssign) {
+                // 「タスク割振り」タブが選ばれたら、スタッフリストを（再）描画
+                updateStaffLists(); 
+            } else {
+                // 「割振り確認」タブが選ばれたら、サマリーを再生成
                 generateSummaryView();
             }
         }
@@ -909,6 +1014,61 @@
             document.getElementById('tab-close').classList.toggle('active', !isOpen);
         }
         
+        // --- ★ログイン関連 (ここから追加) ---
+
+        /**
+         * ログインモーダルを表示
+         */
+        function showLoginModal() {
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('password-input').value = ""; // 入力欄クリア
+            document.getElementById('login-error').classList.add('hidden'); // エラー非表示
+            document.getElementById('password-input').focus();
+        }
+
+        /**
+         * ログインモーダルを閉じる
+         */
+        function closeLoginModal() {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+
+        /**
+         * パスワードをチェック
+         */
+        function checkPassword() {
+            const input = document.getElementById('password-input').value;
+            const errorEl = document.getElementById('login-error');
+            
+            if (input === ADMIN_PASSWORD) {
+                // 認証成功
+                isLoggedIn = true;
+                closeLoginModal();
+                
+                // 管理者用UIを表示
+                document.getElementById('tab-assign').classList.remove('hidden');
+                document.getElementById('show-login-button').classList.add('hidden');
+                document.getElementById('logout-button').classList.remove('hidden');
+                
+                // 「タスク割振り」タブに切り替え
+                showTab('assign');
+                
+            } else {
+                // 認証失敗
+                errorEl.classList.remove('hidden');
+            }
+        }
+        
+        /**
+         * ログアウト処理
+         */
+        function logout() {
+            // 初期状態に戻す
+            setupInitialView();
+        }
+        // --- (ここまで追加) ---
+        
+
         // --- カスタム選択モーダル関連 ---
         
         /**
@@ -1390,8 +1550,14 @@
             const openStaff = [
                 ...new Set([...staffList.early.map(s => s.name), ...staffList.late.map(s => s.name)])
             ].sort();
-            const openHtml = createTimelineTable(openTasks, openStaff, openTimeSlots);
-            document.getElementById('summary-open-container').innerHTML = openHtml;
+            
+            // ★PC用とスマホ用で生成先を変更
+            // PC用
+            const openHtmlDesktop = createTimelineTable(openTasks, openStaff, openTimeSlots);
+            document.getElementById('summary-open-container-desktop').innerHTML = openHtmlDesktop;
+            // スマホ用
+            const openHtmlMobile = createTimelineListForMobile(openTasks, openStaff, openTimeSlots);
+            document.getElementById('summary-open-container-mobile').innerHTML = openHtmlMobile;
             
             // 閉店作業
             const closeTasks = [
@@ -1401,8 +1567,14 @@
              const closeStaff = [
                 ...new Set([...staffList.closing_employee.map(s => s.name), ...staffList.closing_alba.map(s => s.name)])
             ].sort();
-            const closeHtml = createTimelineTable(closeTasks, closeStaff, closeTimeSlots);
-            document.getElementById('summary-close-container').innerHTML = closeHtml;
+            
+            // ★PC用とスマホ用で生成先を変更
+            // PC用
+            const closeHtmlDesktop = createTimelineTable(closeTasks, closeStaff, closeTimeSlots);
+            document.getElementById('summary-close-container-desktop').innerHTML = closeHtmlDesktop;
+            // スマホ用
+            const closeHtmlMobile = createTimelineListForMobile(closeTasks, closeStaff, closeTimeSlots);
+            document.getElementById('summary-close-container-mobile').innerHTML = closeHtmlMobile;
         }
         
         /**
@@ -1474,9 +1646,9 @@
                         const pairClass = isPair ? 'pair-task' : '';
                         
                         bodyHtml += `<td colspan="${colspan}">
-                                        <div class="task-bar ${pairClass}" title="${task.task} (${task.start}-${task.end})">
-                                            ${task.task}
-                                        </div>
+                                         <div class="task-bar ${pairClass}" title="${task.task} (${task.start}-${task.end})">
+                                             ${task.task}
+                                         </div>
                                      </td>`;
                         timeSlotIndex += colspan; // インデックスをジャンプ
                         
@@ -1486,9 +1658,9 @@
                         const pairClass = isPair ? 'pair-task' : '';
                         
                          bodyHtml += `<td>
-                                        <div class="task-bar ${pairClass}" title="${task.task} (${task.start}-?)">
-                                            ${task.task}
-                                        </div>
+                                         <div class="task-bar ${pairClass}" title="${task.task} (${task.start}-?)">
+                                             ${task.task}
+                                         </div>
                                      </td>`;
                         timeSlotIndex++;
                         
@@ -1510,116 +1682,61 @@
             `;
         }
         
-        // --- CSVエクスポート関数群 ---
-
+        // --- ★スマホ用タイムラインリスト生成 (ここから追加) ---
         /**
-         * タイムラインをCSVとしてエクスポートするトリガー
+         * スマホ用のタイムラインリストHTMLを生成
          */
-        function exportTimelineCSV(type) {
-            let tasks, staffNames, timeSlots, fileName;
-            
-            if (type === 'open') {
-                tasks = [
-                    ...collectTasks(staffList.early),
-                    ...collectTasks(staffList.late)
-                ];
-                staffNames = [
-                    ...new Set([...staffList.early.map(s => s.name), ...staffList.late.map(s => s.name)])
-                ].sort();
-                timeSlots = openTimeSlots;
-                fileName = 'kaigyou_timeline.csv';
-            } else { // type === 'close'
-                tasks = [
-                    ...collectTasks(staffList.closing_employee),
-                    ...collectTasks(staffList.closing_alba)
-                ];
-                staffNames = [
-                    ...new Set([...staffList.closing_employee.map(s => s.name), ...staffList.closing_alba.map(s => s.name)])
-                ].sort();
-                timeSlots = closeTimeSlots;
-                fileName = 'heigyou_timeline.csv';
-            }
-            
+        function createTimelineListForMobile(tasks, staffNames, timeSlots) {
             if (staffNames.length === 0) {
-                // 将来的にカスタムアラートに変更
-                console.warn("エクスポートするデータがありません。");
-                return;
+                return '<p class="p-4 text-center text-gray-500">割り当てられたスタッフがいません。</p>';
             }
-            
-            const csvContent = generateTimelineCSV(tasks, staffNames, timeSlots);
-            downloadCSV(csvContent, fileName);
-        }
 
-        /**
-         * タイムラインデータからCSV文字列を生成
-         */
-        function generateTimelineCSV(tasks, staffNames, timeSlots) {
-            let csv = '';
-            
-            // ヘッダー行 (時間)
-            // 引用符で囲み、カンマエスケープ
-            const header = ['"スタッフ"', ...timeSlots.map(t => `"${t}"`)].join(',');
-            csv += header + '\r\n';
-            
-            // データ行 (スタッフごと)
+            let html = '<div class="space-y-4">'; // カード間のスペース
+
             staffNames.forEach(name => {
-                let row = [`"${name.replace(/"/g, '""')}"`]; // 1列目はスタッフ名
-                
                 const staffTasks = tasks
-                    .filter(t => t.name === name && t.start) // startがあるタスクのみ
-                    .sort((a, b) => a.start.localeCompare(b.start));
+                    .filter(t => t.name === name && t.start)
+                    .sort((a, b) => a.start.localeCompare(b.start)); // 開始時間でソート
 
-                // CSVではcolspanが使えないので、各セルにタスクを埋める
-                let taskMap = new Array(timeSlots.length).fill(null);
-                
-                staffTasks.forEach(task => {
-                    const startIndex = timeSlots.indexOf(task.start);
-                    if (startIndex === -1) return; // 開始時間がない
+                html += `
+                    <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                        <h3 class="font-semibold text-lg text-gray-800 bg-gray-50 px-4 py-3 border-b border-gray-200">
+                            ${name}
+                        </h3>
+                `;
 
-                    const endIndex = timeSlots.indexOf(task.end);
-                    const end = (endIndex > startIndex) ? endIndex : (startIndex + 1); // 終了未定か1スロットなら1つ分
+                if (staffTasks.length === 0) {
+                    html += '<p class="px-4 py-3 text-gray-500 text-sm">担当タスクがありません。</p>';
+                } else {
+                    html += '<ul class="divide-y divide-gray-200">';
+                    staffTasks.forEach(task => {
+                        const isPair = task.task.includes('2人');
+                        // ★ペアタスクの色分け
+                        const pairClass = isPair ? 'bg-red-50 border-l-red-400' : 'bg-indigo-50 border-l-indigo-400';
+                        const timeLabel = (task.start && task.end) ? `${task.start} - ${task.end}` : (task.start || '時間未定');
+                        
+                        html += `
+                            <li class="px-4 py-3 ${pairClass} border-l-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-gray-700">${task.task}</span>
+                                    <span class="text-sm font-mono text-gray-600">${timeLabel}</span>
+                                </div>
+                            </li>
+                        `;
+                    });
+                    html += '</ul>';
+                }
 
-                    const taskName = (task.task || 'タスク未入力')
-                                        .replace(/\r\n|\n|\r/g, " ")
-                                        .replace(/"/g, '""');
-                    const taskLabel = `"${taskName} (${task.start}-${task.end || '?'})"`;
-
-                    // タスクでセルを埋める
-                    for (let i = startIndex; i < end && i < timeSlots.length; i++) {
-                        taskMap[i] = taskLabel;
-                    }
-                });
-                
-                // nullを空セル "" に変換
-                const cells = taskMap.map(cell => cell || '""');
-                
-                row.push(...cells); // スタッフ名の配列にタイムスロットの配列を結合
-                csv += row.join(',') + '\r\n'; // 1行分のCSV文字列を追加
+                html += '</div>'; // card end
             });
-            
-            return csv;
-        }
 
-        /**
-         * CSVコンテンツをファイルとしてダウンロード
-         */
-        function downloadCSV(csvContent, fileName) {
-            // 日本語（UTF-8）のCSVがExcelで文字化けするのを防ぐBOMを付与
-            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-            const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
-            
-            const link = document.createElement("a");
-            if (link.download !== undefined) { // ブラウザがdownload属性をサポートしているか
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute("download", fileName);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url); // メモリ解放
-            }
+            html += '</div>'; // container end
+            return html;
         }
+        // --- (ここまで追加) ---
+
+        // --- CSVエクスポート関数群 ---
+        // ★CSVダウンロード関連の関数 (exportTimelineCSV, generateTimelineCSV, downloadCSV) を削除
         
         // --- (ここまで追加) ---
 
