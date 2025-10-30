@@ -11,7 +11,7 @@
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- ★ Firebase SDK (ここから追加) -->
+    <!-- ★ Firebase SDK (Cloudflare対応版) -->
     <script type="module">
         // Firebase SDK imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -19,10 +19,27 @@
         import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase 初期化 ---
-        // グローバル変数から設定を取得
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // ▼▼▼▼▼【重要】ここにご自身のFirebase設定を貼り付けてください ▼▼▼▼▼
+        // Firebaseプロジェクト設定 > 全般 > マイアプリ でWebアプリの設定オブジェクトを取得できます。
+        const firebaseConfig = {
+          apiKey: "AIz...YOUR_API_KEY",
+          authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+          projectId: "YOUR_PROJECT_ID",
+          storageBucket: "YOUR_PROJECT_ID.appspot.com",
+          messagingSenderId: "...",
+          appId: "1:..."
+        };
+
+        // ▼▼▼▼▼【重要】Cloudflare Pages用のアプリIDを設定してください ▼▼▼▼▼
+        // このIDは、Firestoreのデータパス /artifacts/{appId}/... で使われます。
+        // Canvas環境とは別の、本番用のデータ場所を指定します。
+        // 例: "task-bot-prod-2025"
+        const appId = "task-bot-cloudflare"; 
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+        // Cloudflareでは __initial_auth_token は使えません。
+        const initialAuthToken = null; 
 
         let app, auth, db;
         let userId;
@@ -36,11 +53,15 @@
          */
         async function initFirebase() {
             try {
-                // グローバル変数に設定がない場合は、フォールバック（デモ用）
-                if (Object.keys(firebaseConfig).length === 0) {
-                     console.warn("Firebase config not found. Using placeholder config (this will likely fail outside of a test environment).");
-                     // 開発用のダミー設定（インストラクションでは不要だが、ローカルテスト用）
-                     // firebaseConfig = { apiKey: "...", authDomain: "...", projectId: "..." };
+                // ★設定がデフォルト値のままかチェック
+                if (Object.keys(firebaseConfig).length === 0 || firebaseConfig.apiKey.startsWith("AIz...")) {
+                     console.error("Firebase config is not set. Please edit the HTML file and add your Firebase configuration in <script type='module'>.");
+                     // エラーを画面に表示
+                     const header = document.querySelector('header');
+                     if(header) {
+                         header.innerHTML += `<p class="text-red-500 font-bold">Firebase設定が必要です。HTMLファイルを編集してください。</p>`;
+                     }
+                     return; // ★設定がない場合はここで停止
                 }
 
                 app = initializeApp(firebaseConfig);
@@ -60,10 +81,11 @@
                     } else {
                         console.log("Firebase Auth: User is signed out. Signing in...");
                         // 認証トークンがあればそれを使用、なければ匿名認証
-                        if (initialAuthToken) {
+                        if (initialAuthToken) { // (Cloudflareでは常にnull)
                             console.log("Signing in with custom token...");
                             await signInWithCustomToken(auth, initialAuthToken);
                         } else {
+                            // ★ Cloudflareでは常に匿名認証を使用
                             console.log("Signing in anonymously...");
                             await signInAnonymously(auth);
                         }
@@ -81,7 +103,7 @@
                 // エラーを画面に表示（オプション）
                 const header = document.querySelector('header');
                 if(header) {
-                    header.innerHTML += `<p class="text-red-500 font-bold">データベース接続エラー</p>`;
+                    header.innerHTML += `<p class="text-red-500 font-bold">データベース接続エラー: ${error.message}</p>`;
                 }
             }
         }
