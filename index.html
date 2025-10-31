@@ -1761,6 +1761,7 @@
         
         /**
          * 「割振り確認」タブのタイムラインを生成・表示
+         * ★★★ バグ修正 (v2) ★★★
          */
         function generateSummaryView() {
             // ★ window.staffList を参照
@@ -1772,7 +1773,7 @@
                 ...new Set([...window.staffList.early.map(s => s.name), ...window.staffList.late.map(s => s.name)])
             ].sort();
             
-            // ★PC用とスマホ用で生成先を変更
+            // --- 開店作業の描画 ---
             // PC用
             const openHtmlDesktop = createTimelineTable(openTasks, openStaff, openTimeSlots);
             document.getElementById('summary-open-container-desktop').innerHTML = openHtmlDesktop;
@@ -1780,7 +1781,7 @@
             const openHtmlMobile = createTimelineListForMobile(openTasks, openStaff, openTimeSlots);
             document.getElementById('summary-open-container-mobile').innerHTML = openHtmlMobile;
             
-            // 閉店作業
+            // --- 閉店作業の描画 ---
             // ★ window.staffList を参照
             const closeTasks = [
                 ...collectTasks(window.staffList.closing_employee),
@@ -1790,12 +1791,14 @@
                 ...new Set([...window.staffList.closing_employee.map(s => s.name), ...window.staffList.closing_alba.map(s => s.name)])
             ].sort();
             
-            // ★PC用とスマホ用で生成先を変更
+            // ★★★ バグ修正 (v2) ★★★
             // PC用
             const closeHtmlDesktop = createTimelineTable(closeTasks, closeStaff, closeTimeSlots);
-            document.getElementById('summary-open-container-desktop').innerHTML = closeHtmlDesktop;
+            // ★修正: 'summary-open-container-desktop' -> 'summary-close-container-desktop'
+            document.getElementById('summary-close-container-desktop').innerHTML = closeHtmlDesktop; 
             // スマホ用
             const closeHtmlMobile = createTimelineListForMobile(closeTasks, closeStaff, closeTimeSlots);
+            // ★修正: 'summary-open-container-mobile' -> 'summary-close-container-mobile'
             document.getElementById('summary-close-container-mobile').innerHTML = closeHtmlMobile;
         }
         
