@@ -11,7 +11,7 @@
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- ★ Firebase SDK (Cloudflare対応版) -->
+    <!-- ★★★ Firebase SDK（共有版） ★★★ -->
     <script type="module">
         // Firebase SDK imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -20,7 +20,7 @@
 
         // --- Firebase 初期化 ---
 
-        // ▼▼▼▼▼【重要】お客様の設定に置き換え済みです ▼▼▼▼▼
+        // ▼▼▼▼▼ お客様の設定（wakatest-46f14）に設定済みです ▼▼▼▼▼
         const firebaseConfig = {
           apiKey: "AIzaSyBdjf2YJIo9OSJhPDBuEJAxqjVvS0qTN3E",
           authDomain: "wakatest-46f14.firebaseapp.com",
@@ -29,70 +29,45 @@
           messagingSenderId: "770004156053",
           appId: "1:770004156053:web:04645f8fa745b07c03659c"
         };
-
-        // ▼▼▼▼▼【重要】Cloudflare Pages用のアプリIDを設定してください ▼▼▼▼▼
-        // このIDは、Firestoreのデータパス /artifacts/{appId}/... で使われます。
-        // ★プロジェクトID "wakatest-46f14" を "appId" として使用します。
         const appId = "wakatest-46f14"; 
         // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-        // Cloudflareでは __initial_auth_token は使えません。
-        const initialAuthToken = null; 
 
         let app, auth, db;
         let userId;
         let unsubscribeFromTasks; // onSnapshotのリスナー解除用
-
-        // Firestoreのドキュメント参照をグローバルに定義
-        let taskDocRef;
+        let taskDocRef; // Firestoreのドキュメント参照
 
         /**
          * Firebaseの初期化と認証、データ監視を開始
          */
         async function initFirebase() {
             try {
-                // ★設定がデフォルト値のままかチェック
-                if (Object.keys(firebaseConfig).length === 0 || firebaseConfig.apiKey.startsWith("AIz...")) {
-                     console.error("Firebase config is not set. Please edit the HTML file and add your Firebase configuration in <script type='module'>.");
-                     // エラーを画面に表示
-                     const header = document.querySelector('header');
-                     if(header) {
-                         header.innerHTML += `<p class="text-red-500 font-bold">Firebase設定が必要です。HTMLファイルを編集してください。</p>`;
-                     }
-                     return; // ★設定がない場合はここで停止
-                }
-
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-                setLogLevel('Debug'); // Firestoreのデバッグログを有効化
+                setLogLevel('Debug'); // デバッグログを有効化
 
                 // Firestoreのパスを定義
-                // データは全ユーザー共通（公開）のため、publicパスを使用
                 taskDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_assignments', 'today');
 
-                // 認証状態の監視
+                // 認証状態の監視 (★匿名認証のみ)
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        console.log("Firebase Auth: User is signed in.", user.uid);
+                        console.log("Firebase Auth: User is signed in (anonymously).", user.uid);
                         userId = user.uid;
                     } else {
-                        console.log("Firebase Auth: User is signed out. Signing in...");
-                        // ★ Cloudflareでは常に匿名認証を使用
-                        console.log("Signing in anonymously...");
+                        console.log("Firebase Auth: Signing in anonymously...");
+                        // ★ここで「匿名認証」を試みます
                         await signInAnonymously(auth);
-                        // 認証が成功すると、このonAuthStateChangedリスナーが再度呼ばれる
                     }
-
                     // 認証が確立したら（userIdがセットされたら）、データ監視を開始
-                    if (userId && !unsubscribeFromTasks) { // ★リスナーがまだ開始されていない場合のみ
+                    if (userId && !unsubscribeFromTasks) {
                         startTaskListener();
                     }
                 });
 
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                // エラーを画面に表示（オプション）
                 const header = document.querySelector('header');
                 if(header) {
                     header.innerHTML += `<p class="text-red-500 font-bold">データベース接続エラー: ${error.message}</p>`;
@@ -104,51 +79,41 @@
          * Firestoreのタスク割り当てデータの監視を開始
          */
         function startTaskListener() {
-            // 既にリスナーがあれば解除
             if (unsubscribeFromTasks) {
                 unsubscribeFromTasks();
             }
-
             console.log("Starting Firestore snapshot listener for:", taskDocRef.path);
-
+            
             // onSnapshotでリアルタイムのデータ変更を監視
             unsubscribeFromTasks = onSnapshot(taskDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     console.log("Firestore data received:", docSnap.data());
-                    // 取得したデータでグローバル変数を上書き
                     const data = docSnap.data();
-                    // staffListの各キーが存在するか確認し、なければ空配列で初期化
                     window.staffList.early = data.early || [];
                     window.staffList.late = data.late || [];
                     window.staffList.closing_employee = data.closing_employee || [];
                     window.staffList.closing_alba = data.closing_alba || [];
-
                 } else {
                     console.log("No data found in Firestore. Using default empty list.");
-                    // データがない場合（初回など）は空で初期化
                     window.staffList = { early: [], late: [], closing_employee: [], closing_alba: [] };
                 }
-
-                // データ更新後、現在のビューを再描画
-                // (重要: window.staffListが更新されたことをグローバルスコープに反映させる)
-                if (window.refreshCurrentView) {
-                     window.refreshCurrentView();
-                }
+                
+                // ★データ受信時に「編集リスト」と「タイムライン」の両方を更新
+                window.updateStaffLists();
+                window.generateSummaryView();
 
             }, (error) => {
                 console.error("Error listening to Firestore:", error);
+                // (エラーがあっても、ローカルの変更は続行できるようにする)
             });
         }
 
         /**
-         * データをFirestoreに保存 (管理者がログインしている場合のみ)
+         * データをFirestoreに保存 (★ログインチェックを削除)
          */
         async function saveStaffListToFirestore() {
-            // (グローバルスコープの) isLoggedIn をチェック
-            if (!window.isLoggedIn) {
-                console.log("Not logged in. Skipping save to Firestore.");
-                return;
-            }
+            // ★isLoggedIn のチェックを削除
+            
             if (!taskDocRef) {
                 console.error("Firestore document reference is not initialized.");
                 return;
@@ -156,24 +121,20 @@
 
             try {
                 console.log("Saving data to Firestore...", window.staffList);
-                // (グローバルスコープの) staffList を保存
-                // JSON.stringify/parseでシリアライズ/デシリアライズを行い、
-                // undefinedなどがFirestore保存時にエラーになるのを防ぐ
                 const cleanData = JSON.parse(JSON.stringify(window.staffList));
                 await setDoc(taskDocRef, cleanData);
                 console.log("Data saved successfully.");
             } catch (error) {
                 console.error("Error saving data to Firestore:", error);
+                // (ここでエラーが出ても、画面上の操作は続行される)
             }
         }
 
         // --- グローバルスコープに関数を公開 ---
-        // (HTMLのonclickから呼べるようにするため)
         window.initFirebase = initFirebase;
-        window.saveStaffListToFirestore = saveStaffListToFirestore;
-
+        window.saveStaffListToFirestore = saveStaffListToFirestore; // ★saveStaffListToFirestore に変更
     </script>
-    <!-- ★ Firebase SDK (ここまで追加) -->
+    <!-- ★★★ Firebase SDK (ここまで) ★★★ -->
 
     <style>
         /* モダンデザインのスタイル */
@@ -183,7 +144,6 @@
             color: #334155; 
         }
 
-        /* ★タイトル (黒に変更) */
         h1.title-effect {
             font-size: 2.5rem; /* 4xl (36px) */
             font-weight: 700;
@@ -698,26 +658,15 @@
             </h1>
         </header>
         
-        <!-- メインチブ (セグメントコントロール風) と ログインボタン -->
-        <!-- ★変更: main-tab-container追加 -->
-        <div class="mb-6 md:mb-8 flex flex-col md:flex-row justify-center items-center relative main-tab-container">
+        <!-- ★★★ ログイン機能・メインチブを削除 ★★★ -->
+        <!-- シンプル版では常に「開店・閉店」タブを表示 -->
+        <div id="sub-tab-container" class="mb-6 md:mb-8 flex justify-center">
             <div class="tab-container">
-                <!-- 「タスク割振り」タブ (最初は非表示) -->
-                <button id="tab-assign" class="tab-button hidden" onclick="showTab('assign')">
-                    タスク割振り
+                <button id="tab-open" class="tab-button sub-tab-button active" onclick="showSubTab('open')">
+                    開店作業 (07:00 - 10:00)
                 </button>
-                <button id="tab-summary" class="tab-button active" onclick="showTab('summary')">
-                    割振り確認
-                </button>
-            </div>
-            <!-- ログイン/ログアウトボタンエリア -->
-            <!-- ★変更: admin-button-container追加, md:absolute -->
-            <div class="admin-button-container md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
-                <button id="show-login-button" class="add-button secondary-button" onclick="showLoginModal()">
-                    管理者メニュー
-                </button>
-                <button id="logout-button" class="add-button secondary-button hidden" onclick="logout()">
-                    ログアウト
+                <button id="tab-close" class="tab-button sub-tab-button" onclick="showSubTab('close')">
+                    閉店作業 (22:50 - 23:30)
                 </button>
             </div>
         </div>
@@ -725,204 +674,100 @@
 
         <!-- メインコンテンツ -->
         <main>
-            <!-- サブタブ（開店・閉店） (セグメントコントロール風) -->
-            <!-- ★変更: コンテナごと非表示に -->
-            <div id="sub-tab-container" class="mb-6 md:mb-8 flex justify-center hidden">
-                <div class="tab-container">
-                    <button id="tab-open" class="tab-button sub-tab-button active" onclick="showSubTab('open')">
-                        開店作業 (07:00 - 10:00)
-                    </button>
-                    <button id="tab-close" class="tab-button sub-tab-button" onclick="showSubTab('close')">
-                        閉店作業 (22:50 - 23:30)
-                    </button>
-                </div>
-            </div>
-
-            <!-- 「タスク割振り」タブのコンテンツ -->
-            <!-- ★変更: hiddenを追加 (デフォルト非表示) -->
-            <div id="content-assign" class="space-y-6 md:space-y-8 hidden">
-                <!-- 開店作業エリア -->
-                <div id="content-open">
-                    <!-- カード型セクションに変更 -->
-                    <section class="task-section mb-6 md:mb-8">
-                        <div class="section-header flex justify-between items-center">
-                            <h2 class="section-title">
-                                社員・早番
-                            </h2>
-                            <button onclick="autoAssignTasks('early', 'open')" class="add-button secondary-button">
-                                自動割振り
-                            </button>
-                        </div>
-                        <div class="section-content space-y-4">
-                            <!-- スタッフ追加フォーム (カスタムモーダル) -->
-                            <div class="flex space-x-2">
-                                <button id="add-staff-button-early" 
-                                        class="custom-select-button staff-select-button placeholder flex-grow" 
-                                        onclick="openStaffSelect('early', 'employees')"
-                                        data-placeholder="--- 社員を検索・選択 ---">
-                                    <span>--- 社員を検索・選択 ---</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button onclick="addStaff('early')" class="add-button">追加</button>
-                            </div>
-                            <!-- スタッフ一覧テーブル -->
-                            <div>
-                                <table class="task-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-1/4">スタッフ名</th>
-                                            <th class="w-1/6">開始</th>
-                                            <th class="w-1/6">終了</th>
-                                            <th class="w-2/5">担当タスク</th>
-                                            <th class="w-auto"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="staff-list-open-early">
-                                        <!-- スタッフ行はJSで描画 -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="task-section mb-6 md:mb-8">
-                        <div class="section-header flex justify-between items-center">
-                            <h2 class="section-title">
-                                早番アルバイト
-                            </h2>
-                            <button onclick="autoAssignTasks('late', 'open')" class="add-button secondary-button">
-                                自動割振り
-                            </button>
-                        </div>
-                        <div class="section-content space-y-4">
-                            <!-- スタッフ追加フォーム (カスタムモーダル) -->
-                            <div class="flex space-x-2">
-                                <button id="add-staff-button-late" 
-                                        class="custom-select-button staff-select-button placeholder flex-grow" 
-                                        onclick="openStaffSelect('late', 'alba_early')"
-                                        data-placeholder="--- 早番アルバイトを検索・選択 ---">
-                                    <span>--- 早番アルバイトを検索・選択 ---</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button onclick="addStaff('late')" class="add-button">追加</button>
-                            </div>
-                            <div>
-                                <table class="task-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-1/4">スタッフ名</th>
-                                            <th class="w-1/6">開始</th>
-                                            <th class="w-1/6">終了</th>
-                                            <th class="w-2/5">担当タスク</th>
-                                            <th class="w-auto"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="staff-list-open-late">
-                                        <!-- スタッフ行はJSで描画 -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-
-                <!-- 閉店作業エリア -->
-                <div id="content-close" class="hidden">
-                    <section class="task-section mb-6 md:mb-8">
-                        <div class="section-header flex justify-between items-center">
-                            <h2 class="section-title">
-                                社員・遅番
-                            </h2>
-                             <button onclick="autoAssignTasks('closing_employee', 'close')" class="add-button secondary-button">
-                                自動割振り
-                            </button>
-                        </div>
-                        <div class="section-content space-y-4">
-                            <!-- スタッフ追加フォーム (カスタムモーダル) -->
-                            <div class="flex space-x-2">
-                                <button id="add-staff-button-closing_employee" 
-                                        class="custom-select-button staff-select-button placeholder flex-grow" 
-                                        onclick="openStaffSelect('closing_employee', 'employees')"
-                                        data-placeholder="--- 社員を検索・選択 ---">
-                                    <span>--- 社員を検索・選択 ---</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button onclick="addStaff('closing_employee')" class="add-button">追加</button>
-                            </div>
-                            <div>
-                                <table class="task-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-1/4">スタッフ名</th>
-                                            <th class="w-1/6">開始</th>
-                                            <th class="w-1/6">終了</th>
-                                            <th class="w-2/5">担当タスク</th>
-                                            <th class="w-auto"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="staff-list-close-employee">
-                                        <!-- スタッフ行はJSで描画 -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="task-section mb-6 md:mb-8">
-                        <div class="section-header flex justify-between items-center">
-                            <h2 class="section-title">
-                                アルバイト・遅番
-                            </h2>
-                             <button onclick="autoAssignTasks('closing_alba', 'close')" class="add-button secondary-button">
-                                自動割振り
-                            </button>
-                        </div>
-                        <div class="section-content space-y-4">
-                            <!-- スタッフ追加フォーム (カスタムモーダル) -->
-                            <div class="flex space-x-2">
-                                <button id="add-staff-button-closing_alba" 
-                                        class="custom-select-button staff-select-button placeholder flex-grow" 
-                                        onclick="openStaffSelect('closing_alba', 'alba_late')"
-                                        data-placeholder="--- 遅番アルバイトを検索・選択 ---">
-                                    <span>--- 遅番アルバイトを検索・選択 ---</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button onclick="addStaff('closing_alba')" class="add-button">追加</button>
-                            </div>
-                            <div>
-                                <table class="task-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-1/4">スタッフ名</th>
-                                            <th class="w-1/6">開始</th>
-                                            <th class="w-1/6">終了</th>
-                                            <th class="w-2/5">担当タスク</th>
-                                            <th class="w-auto"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="staff-list-close-alba">
-                                        <!-- スタッフ行はJSで描画 -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-            </div>
+            <!-- ★★★「タスク割振り」と「割振り確認」を統合 ★★★ -->
             
-            <!-- 「割振り確認」タブのコンテンツ -->
-            <!-- ★変更: hiddenを削除 (デフォルト表示) -->
-            <div id="content-summary" class="">
+            <!-- --- 開店作業エリア --- -->
+            <div id="content-open" class="space-y-6 md:space-y-8">
+                <!-- カード型セクション (社員・早番) -->
+                <section class="task-section mb-6 md:mb-8">
+                    <div class="section-header flex justify-between items-center">
+                        <h2 class="section-title">
+                            社員・早番
+                        </h2>
+                        <button onclick="autoAssignTasks('early', 'open')" class="add-button secondary-button">
+                            自動割振り
+                        </button>
+                    </div>
+                    <div class="section-content space-y-4">
+                        <!-- スタッフ追加フォーム -->
+                        <div class="flex space-x-2">
+                            <button id="add-staff-button-early" 
+                                    class="custom-select-button staff-select-button placeholder flex-grow" 
+                                    onclick="openStaffSelect('early', 'employees')"
+                                    data-placeholder="--- 社員を検索・選択 ---">
+                                <span>--- 社員を検索・選択 ---</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <button onclick="addStaff('early')" class="add-button">追加</button>
+                        </div>
+                        <!-- スタッフ一覧テーブル -->
+                        <div>
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-auto"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-open-early">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- カード型セクション (早番アルバイト) -->
+                <section class="task-section mb-6 md:mb-8">
+                    <div class="section-header flex justify-between items-center">
+                        <h2 class="section-title">
+                            早番アルバイト
+                        </h2>
+                        <button onclick="autoAssignTasks('late', 'open')" class="add-button secondary-button">
+                            自動割振り
+                        </button>
+                    </div>
+                    <div class="section-content space-y-4">
+                        <!-- スタッフ追加フォーム -->
+                        <div class="flex space-x-2">
+                            <button id="add-staff-button-late" 
+                                    class="custom-select-button staff-select-button placeholder flex-grow" 
+                                    onclick="openStaffSelect('late', 'alba_early')"
+                                    data-placeholder="--- 早番アルバイトを検索・選択 ---">
+                                <span>--- 早番アルバイトを検索・選択 ---</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <button onclick="addStaff('late')" class="add-button">追加</button>
+                        </div>
+                        <div>
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-auto"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-open-late">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- 開店作業 タイムライン -->
                 <section class="mb-10">
-                    <!-- 見出しとボタンをフレックスボックスで横並びに -->
                     <div class="flex justify-between items-center mb-5">
                         <h2 class="section-title" style="border-color: #4f46e5;">
                             開店作業 タイムライン
                         </h2>
-                        <!-- ★CSVダウンロードボタンを削除 -->
                     </div>
-                    
-                    <!-- ★タイムラインコンテナをPC用とスマホ用に分離 -->
                     <div id="summary-open-container">
                         <!-- PC用 (横スクロール) -->
                         <div id="summary-open-container-desktop" class="timeline-container hidden md:block">
@@ -934,17 +779,99 @@
                         </div>
                     </div>
                 </section>
+            </div>
+
+            <!-- --- 閉店作業エリア --- -->
+            <div id="content-close" class="space-y-6 md:space-y-8 hidden">
+                <!-- カード型セクション (社員・遅番) -->
+                <section class="task-section mb-6 md:mb-8">
+                    <div class="section-header flex justify-between items-center">
+                        <h2 class="section-title">
+                            社員・遅番
+                        </h2>
+                         <button onclick="autoAssignTasks('closing_employee', 'close')" class="add-button secondary-button">
+                            自動割振り
+                        </button>
+                    </div>
+                    <div class="section-content space-y-4">
+                        <!-- スタッフ追加フォーム -->
+                        <div class="flex space-x-2">
+                            <button id="add-staff-button-closing_employee" 
+                                    class="custom-select-button staff-select-button placeholder flex-grow" 
+                                    onclick="openStaffSelect('closing_employee', 'employees')"
+                                    data-placeholder="--- 社員を検索・選択 ---">
+                                <span>--- 社員を検索・選択 ---</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <button onclick="addStaff('closing_employee')" class="add-button">追加</button>
+                        </div>
+                        <div>
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-auto"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-close-employee">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- カード型セクション (アルバイト・遅番) -->
+                <section class="task-section mb-6 md:mb-8">
+                    <div class="section-header flex justify-between items-center">
+                        <h2 class="section-title">
+                            アルバイト・遅番
+                        </h2>
+                         <button onclick="autoAssignTasks('closing_alba', 'close')" class="add-button secondary-button">
+                            自動割振り
+                        </button>
+                    </div>
+                    <div class="section-content space-y-4">
+                        <!-- スタッフ追加フォーム -->
+                        <div class="flex space-x-2">
+                            <button id="add-staff-button-closing_alba" 
+                                    class="custom-select-button staff-select-button placeholder flex-grow" 
+                                    onclick="openStaffSelect('closing_alba', 'alba_late')"
+                                    data-placeholder="--- 遅番アルバイトを検索・選択 ---">
+                                <span>--- 遅番アルバイトを検索・選択 ---</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <button onclick="addStaff('closing_alba')" class="add-button">追加</button>
+                        </div>
+                        <div>
+                            <table class="task-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">スタッフ名</th>
+                                        <th class="w-1/6">開始</th>
+                                        <th class="w-1/6">終了</th>
+                                        <th class="w-2/5">担当タスク</th>
+                                        <th class="w-auto"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staff-list-close-alba">
+                                    <!-- スタッフ行はJSで描画 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
                 
+                <!-- 閉店作業 タイムライン -->
                 <section class="mb-10">
-                     <!-- 見出しとボタンをフレックスボックスで横並びに -->
                     <div class="flex justify-between items-center mb-5">
                         <h2 class="section-title" style="border-color: #4f46e5;">
                             閉店作業 タイムライン
                         </h2>
-                         <!-- ★CSVダウンロードボタンを削除 -->
                     </div>
-                    
-                     <!-- ★タイムラインコンテナをPC用とスマホ用に分離 -->
                      <div id="summary-close-container">
                         <!-- PC用 (横スクロール) -->
                         <div id="summary-close-container-desktop" class="timeline-container hidden md:block">
@@ -962,23 +889,7 @@
 
     </div>
 
-    <!-- ログインモーダル (★追加) -->
-    <div id="login-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h3 class="text-xl font-semibold mb-4">管理者ログイン</h3>
-            <p class="mb-4">パスワードを入力してください。</p>
-            <input id="password-input" type="password" class="w-full p-2 border border-gray-300 rounded-md mb-2" placeholder="パスワード">
-            <p id="login-error" class="text-red-500 text-sm mb-4 hidden">パスワードが違います。</p>
-            <div class="flex justify-end space-x-3">
-                <button onclick="closeLoginModal()" class="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition">
-                    キャンセル
-                </button>
-                <button onclick="checkPassword()" class="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition">
-                    ログイン
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- ★★★ ログインモーダルを削除 ★★★ -->
 
     <!-- 削除確認モーダル -->
     <div id="delete-modal" class="modal-overlay hidden">
@@ -1012,12 +923,8 @@
 
     <script>
         // --- 設定データ ---
-
-        // スタッフのマスター名簿 (PDFから)
         const masterStaffList = {
             employees: [
-                // "田村もも乃", "阿部 敏之", "西田在城", "佐藤 大輔", "古場 健悟", 
-                // "川野 剛史", "浅野貴之", 
                 "関口 周吾", "鈴木優希", "鈴木 達也", 
                 "成田 健吾", "柳谷 圭亮", "石山峻冴", "小野坂隼", "若松脩斗", "生沼彪"
             ],
@@ -1031,41 +938,22 @@
             ]
         };
 
-        // タスクリスト
         const taskLists = {
             open: [
-                "金銭計数",
-                "近隣店チェック・外販", // ★変更
-                "空調、配電系",
-                "抽選準備",
-                "抽選",
-                "台チェック",
-                "販促確認",
-                "朝礼" // ★変更
+                "金銭計数", "近隣店チェック・外販", "空調、配電系", "抽選準備", 
+                "抽選", "台チェック", "販促確認", "朝礼"
             ],
             close: [
-                // "カード点滅つぶし（営業後できるだけ）", // ★削除
-                "立駐2人",
-                "事務所清掃",
-                "島上クイックルワイパー",
-                "引継ぎ記載",
-                "施錠確認",
-                "飲み残し",
-                "工具箱チェック",
-                // "（営業中）島下確認", // ★削除
-                // "（営業中）30π手補給", // ★削除
-                // "（営業中）カード点滅つぶし" // ★削除
+                "立駐2人", "事務所清掃", "島上クイックルワイパー", "引継ぎ記載", 
+                "施錠確認", "飲み残し", "工具箱チェック"
             ]
         };
         
         // --- アプリケーション状態 ---
 
-        // ★管理者ログイン状態 (グローバルスコープに変更)
-        window.isLoggedIn = false;
-        const ADMIN_PASSWORD = "admin"; // ★仮パスワード (本番では変更してください)
+        // ★★★ ログイン状態 (isLoggedIn) を削除 ★★★
 
-        // ★タスク割り振りデータ (グローバルスコープに変更)
-        // (初期値は空。FirebaseのonSnapshotがデータをロードする)
+        // ★タスク割り振りデータ (グローバルスコープ)
         window.staffList = {
             early: [],
             late: [],
@@ -1073,17 +961,15 @@
             closing_alba: []
         };
         
-        // 削除確認用の一時保存
         let deleteInfo = { type: null, sectionKey: null, staffIndex: null, taskIndex: null };
         
-        // カスタム選択モーダルのための一時保存
         let currentSelect = {
             type: null, // 'staff', 'task', 'time'
             callback: null,
             buttonEl: null,
             currentValue: null
         };
-        // スタッフ追加用の一時保存
+        
         let staffToAdd = {
             early: null,
             late: null,
@@ -1091,21 +977,22 @@
             closing_alba: null
         };
 
-        // 時間スロットの事前生成
         const openTimeSlots = generateTimeSlots('07:00', '10:00', 15);
         const closeTimeSlots = generateTimeSlots('22:45', '23:30', 15);
+        
+        // ★★★ ローカルストレージのキーを削除 ★★★
+        // const LOCAL_STORAGE_KEY = "taskAssignmentData_wakatest";
+
 
         // --- アプリケーションロジック ---
 
         document.addEventListener('DOMContentLoaded', () => {
-            // ★ Firebaseの初期化を実行
-            // (HTML Head内の <script type="module"> で定義)
+            // ★★★ Firebaseの初期化を「再追加」 ★★★
             if (window.initFirebase) {
                 window.initFirebase();
             }
-
+            
             // ★UI初期設定関数を呼ぶ
-            // (注意: この時点ではstaffListは空。FirebaseのonSnapshotがデータをロードすると再描画される)
             setupInitialView();
             
             // モーダル外クリックで閉じる
@@ -1115,85 +1002,40 @@
                 }
             });
             
-            // ★ログインモーダルでEnterキーを押したときの処理
-            document.getElementById('password-input').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    checkPassword();
-                }
-            });
+            // ★★★ ログインモーダルのEnterキー処理を削除 ★★★
         });
+        
+        // ★★★ Firebaseの startTaskListener は <head> の <script type="module"> 内にあります ★★★
+
+        // ★★★ saveStaffListToLocalStorage と loadStaffListFromLocalStorage を削除 ★★★
+        // (saveStaffListToFirestore は <head> の <script type="module"> 内にあります)
+
 
         /**
-         * ★現在のタブの状態に基づいてビューを再描画する
-         * (FirestoreのonSnapshotコールバックやタブ切り替え時に呼ばれる)
+         * ★ビューの再描画 (シンプル版)
          */
         window.refreshCurrentView = function() {
-            // 現在アクティブなタブをチェック
-            const assignTab = document.getElementById('tab-assign');
-            const summaryTab = document.getElementById('tab-summary');
-
-            if (summaryTab.classList.contains('active')) {
-                // 「割振り確認」タブが表示されている場合
-                console.log("Refreshing Summary View...");
-                generateSummaryView();
-            } else if (assignTab.classList.contains('active')) {
-                // 「タスク割振り」タブが表示されている場合
-                console.log("Refreshing Assign View...");
-                updateStaffLists();
-            } else {
-                // (初期ロード時など) デフォルトの「割振り確認」を描画
-                console.log("Refreshing Default (Summary) View...");
-                generateSummaryView();
-            }
+            // ★この関数は、FirebaseのonSnapshotが呼ぶ（<head>内）
+            // ★ただし、onSnapshotが呼ぶのは staffList の更新と、
+            // 　updateStaffLists(), generateSummaryView() の呼び出しのみ。
+            // 　この関数自体は不要になった。
         }
 
 
         /**
-         * ★ページ読み込み時のUI初期状態を設定
+         * ★ページ読み込み時のUI初期状態を設定 (シンプル版)
          */
         function setupInitialView() {
-            window.isLoggedIn = false; // ★window.isLoggedIn に変更
+            // ★デフォルトは「開店」タブを表示
+            showSubTab('open');
             
-            // ログイン状態に依存するUI要素
-            document.getElementById('tab-assign').classList.add('hidden');
-            document.getElementById('sub-tab-container').classList.add('hidden');
-            document.getElementById('show-login-button').classList.remove('hidden');
-            document.getElementById('logout-button').classList.add('hidden');
-            
-            // デフォルトは「割振り確認」タブを表示
-            document.getElementById('content-assign').classList.add('hidden');
-            document.getElementById('content-summary').classList.remove('hidden');
-            
-            document.getElementById('tab-assign').classList.remove('active');
-            document.getElementById('tab-summary').classList.add('active');
-            
-            // ★「割振り確認」タブのデータを描画 (onSnapshotが呼ばれると再度更新される)
+            // ★リストとサマリーの両方を描画
+            // (onSnapshotが呼ばれるとデータがロードされ、リストとサマリーが自動更新される)
+            updateStaffLists();
             generateSummaryView();
         }
 
-        /**
-         * ★メインのタブ（割振り/確認）を切り替えます。
-         */
-        function showTab(tabName) {
-            // ログインしていない場合、'assign'タブは見せない
-            if (tabName === 'assign' && !window.isLoggedIn) { // ★window.isLoggedIn
-                console.warn("管理者としてログインしていません。");
-                return; 
-            }
-            
-            const isAssign = tabName === 'assign';
-            document.getElementById('content-assign').classList.toggle('hidden', !isAssign);
-            document.getElementById('content-summary').classList.toggle('hidden', isAssign);
-            
-            // ★サブタブコンテナの表示制御を追加
-            document.getElementById('sub-tab-container').classList.toggle('hidden', !isAssign);
-
-            document.getElementById('tab-assign').classList.toggle('active', isAssign);
-            document.getElementById('tab-summary').classList.toggle('active', !isAssign);
-            
-            // ★タブ切り替え時に、(既にロード済みの) staffList を使ってビューを再描画
-            window.refreshCurrentView();
-        }
+        // ★★★ メインの showTab 関数を削除 ★★★
         
         /**
          * サブのタブ（開店/閉店）を切り替えます。
@@ -1206,61 +1048,7 @@
             document.getElementById('tab-close').classList.toggle('active', !isOpen);
         }
         
-        // --- ★ログイン関連 (ここから追加) ---
-
-        /**
-         * ログインモーダルを表示
-         */
-        function showLoginModal() {
-            document.getElementById('login-modal').classList.remove('hidden');
-            document.getElementById('password-input').value = ""; // 入力欄クリア
-            document.getElementById('login-error').classList.add('hidden'); // エラー非表示
-            document.getElementById('password-input').focus();
-        }
-
-        /**
-         * ログインモーダルを閉じる
-         */
-        function closeLoginModal() {
-            document.getElementById('login-modal').classList.add('hidden');
-        }
-
-        /**
-         * パスワードをチェック
-         */
-        function checkPassword() {
-            const input = document.getElementById('password-input').value;
-            const errorEl = document.getElementById('login-error');
-            
-            if (input === ADMIN_PASSWORD) {
-                // 認証成功
-                window.isLoggedIn = true; // ★window.isLoggedIn
-                closeLoginModal();
-                
-                // 管理者用UIを表示
-                document.getElementById('tab-assign').classList.remove('hidden');
-                document.getElementById('show-login-button').classList.add('hidden');
-                document.getElementById('logout-button').classList.remove('hidden');
-                
-                // 「タスク割振り」タブに切り替え
-                showTab('assign');
-                
-            } else {
-                // 認証失敗
-                errorEl.classList.remove('hidden');
-            }
-        }
-        
-        /**
-         * ログアウト処理
-         */
-        function logout() {
-            // ★isLoggedIn を false に戻す
-            window.isLoggedIn = false;
-            // 初期状態に戻す
-            setupInitialView();
-        }
-        // --- (ここまで追加) ---
+        // ★★★ ログイン関連の関数 (showLoginModal, closeLoginModal, checkPassword, logout) をすべて削除 ★★★
         
 
         // --- カスタム選択モーダル関連 ---
@@ -1269,7 +1057,7 @@
          * スタッフ選択モーダルを開きます。
          */
         function openStaffSelect(sectionKey, masterListKey) {
-            const masterList = masterStaffList[masterListKey];
+            const masterList = masterStaffList[masterListKey]; // ★修正: masterList[masterListKey]
             // ★ window.staffList を参照
             const currentStaff = window.staffList[sectionKey].map(s => s.name);
             const selectedStaffName = staffToAdd[sectionKey];
@@ -1424,7 +1212,7 @@
             }
         }
         
-        // --- スタッフ・タスク操作 (★ Firestore保存処理を追加) ---
+        // --- スタッフ・タスク操作 (★ Firestore保存処理に修正) ---
 
         /**
          * スタッフをリストに追加します。
@@ -1433,18 +1221,15 @@
             const staffName = staffToAdd[sectionKey];
             if (!staffName) return; // 名前が選択されていない
 
-            // ★ window.staffList を参照
             if (window.staffList[sectionKey].find(staff => staff.name === staffName)) {
                 return;
             }
 
-            // ★ window.staffList に追加
             window.staffList[sectionKey].push({
                 name: staffName,
                 tasks: [{ start: "", end: "", task: "" }]
             });
             
-            // 追加フォームをリセット
             staffToAdd[sectionKey] = null;
             const buttonEl = document.getElementById(`add-staff-button-${sectionKey}`);
             updateSelectButton(buttonEl, buttonEl.getAttribute('data-placeholder'), true);
@@ -1452,19 +1237,18 @@
             updateStaffLists();
 
             // ★ Firestoreに保存
-            window.saveStaffListToFirestore();
+            window.saveStaffListToFirestore(); // ★関数名を修正
         }
 
         /**
          * 特定のスタッフにタスクを追加します。
          */
         function addTask(sectionKey, staffIndex) {
-            // ★ window.staffList に追加
             window.staffList[sectionKey][staffIndex].tasks.push({ start: "", end: "", task: "" });
             updateStaffLists();
 
             // ★ Firestoreに保存
-            window.saveStaffListToFirestore();
+            window.saveStaffListToFirestore(); // ★関数名を修正
         }
 
         /**
@@ -1476,7 +1260,6 @@
             const messageEl = document.getElementById('delete-modal-message');
             
             if (type === 'staff') {
-                // ★ window.staffList を参照
                 const staffName = window.staffList[sectionKey][staffIndex].name;
                 messageEl.textContent = `「${staffName}」さんをリストから削除します。よろしいですか？`;
             } else { // type === 'task'
@@ -1500,13 +1283,9 @@
             const { type, sectionKey, staffIndex, taskIndex } = deleteInfo;
 
             if (type === 'staff') {
-                // ★ window.staffList から削除
                 window.staffList[sectionKey].splice(staffIndex, 1);
             } else if (type === 'task') {
-                // タスクが1つの場合は削除させない（代わりにスタッフを削除させる）
-                // ★ window.staffList を参照
                 if (window.staffList[sectionKey][staffIndex].tasks.length > 1) {
-                    // ★ window.staffList から削除
                     window.staffList[sectionKey][staffIndex].tasks.splice(taskIndex, 1);
                 }
             }
@@ -1515,7 +1294,7 @@
             updateStaffLists(); // リストを再描画
 
             // ★ Firestoreに保存
-            window.saveStaffListToFirestore();
+            window.saveStaffListToFirestore(); // ★関数名を修正
         }
 
         /**
@@ -1523,11 +1302,10 @@
          */
         function handleChange(sectionKey, staffIndex, taskIndex, field, value) {
             try {
-                // ★ window.staffList を変更
                 window.staffList[sectionKey][staffIndex].tasks[taskIndex][field] = value;
                 
                 // ★ (重要) 変更が完了したタイミングで保存
-                window.saveStaffListToFirestore();
+                window.saveStaffListToFirestore(); // ★関数名を修正
 
             } catch (e) {
                 console.error("Error updating data:", {sectionKey, staffIndex, taskIndex, field, value}, e);
@@ -1535,15 +1313,13 @@
         }
         
         /**
-         * タスクの自動割振り (★時間設定機能追加 + バグ修正)
+         * タスクの自動割振り
          */
         function autoAssignTasks(sectionKey, taskListName) {
-            // ★ window.staffList を参照
             const staffInGroup = window.staffList[sectionKey];
             const numStaff = staffInGroup.length;
             
             if (numStaff === 0) {
-                // TODO: カスタムアラート
                 console.warn("スタッフが追加されていません。");
                 return;
             }
@@ -1560,17 +1336,14 @@
             // 2. ペアタスクを割り当て
             for (const task of pairTasks) {
                 if (staffIndex + 1 < numStaff) {
-                    // ペアで割り当て可能
                     staffInGroup[staffIndex].tasks.push({ start: "", end: "", task: task });
                     staffInGroup[staffIndex + 1].tasks.push({ start: "", end: "", task: task });
                     staffIndex += 2;
                 } else if (staffIndex < numStaff) {
-                    // 1人しか残っていない
                     staffInGroup[staffIndex].tasks.push({ start: "", end: "", task: task });
                     console.warn(`ペアタスク '${task}' は1人に割り当てられました。`);
                     staffIndex++;
                 }
-                // スタッフが残っていない場合 (staffIndex >= numStaff)、タスクは割り当てられない
             }
             
             // 3. シングルタスクを全員にラウンドロビンで割り当て
@@ -1581,34 +1354,30 @@
                 staffIndex++;
             }
             
-            // 4. タスクが0個のスタッフがいないか確認 (UI表示のため)
+            // 4. タスクが0個のスタッフがいないか確認
             staffInGroup.forEach(staff => {
                 if (staff.tasks.length === 0) {
                     staff.tasks.push({ start: "", end: "", task: "" });
                 }
             });
             
-            // 5. 時間を割り振る (★修正箇所)
+            // 5. 時間を割り振る
             const timeSlots = (taskListName === 'open') ? openTimeSlots : closeTimeSlots;
-            if (timeSlots.length > 1) { // 少なくとも2スロット(1タスク分)必要
+            if (timeSlots.length > 1) { 
                 staffInGroup.forEach(staff => {
                     let nextStartTimeIndex = 0;
                     staff.tasks.forEach(task => {
-                        // ★修正1: まだ時間が設定されておらず(ペアタスクなどで)、かつ割り当て可能な時間スロットがある場合
                         if (!task.start && nextStartTimeIndex < timeSlots.length - 1) { 
-                            // ★修正2: 最後のスロットは開始時間として使わない
-                            
                             const startTime = timeSlots[nextStartTimeIndex];
-                            const endTime = timeSlots[nextStartTimeIndex + 1]; // 15分後のスロット
+                            const endTime = timeSlots[nextStartTimeIndex + 1]; 
                             
                             task.start = startTime;
                             task.end = endTime;
                             
-                            // ペアタスクの場合は、ペアの相手も同じ時間にする
                             if (task.task.includes('2人')) {
                                 const pairStaff = staffInGroup.find(s => 
                                     s.name !== staff.name && 
-                                    s.tasks.some(t => t.task === task.task && !t.start) // まだ時間が設定されてないペアを探す
+                                    s.tasks.some(t => t.task === task.task && !t.start) 
                                 );
                                 if (pairStaff) {
                                     const pairTask = pairStaff.tasks.find(t => t.task === task.task && !t.start);
@@ -1619,7 +1388,7 @@
                                 }
                             }
                             
-                            nextStartTimeIndex++; // 次のタスクは次の時間へ
+                            nextStartTimeIndex++; 
                         }
                     });
                 });
@@ -1628,14 +1397,14 @@
             updateStaffLists();
 
             // ★ Firestoreに保存
-            window.saveStaffListToFirestore();
+            window.saveStaffListToFirestore(); // ★関数名を修正
         }
 
 
         /**
          * 全てのスタッフリストのHTMLを再描画します。
          */
-        function updateStaffLists() {
+        window.updateStaffLists = function() {
             populateStaffList('staff-list-open-early', 'early', 'open', openTimeSlots);
             populateStaffList('staff-list-open-late', 'late', 'open', openTimeSlots);
             populateStaffList('staff-list-close-employee', 'closing_employee', 'close', closeTimeSlots);
@@ -1644,7 +1413,6 @@
 
         /**
          * スタッフリストとタスク選択プルダウンを生成して配置します。
-         * カスタムプルダウン(ボタン)に変更
          */
         function populateStaffList(containerId, sectionKey, taskListName, timeSlots) {
             const container = document.getElementById(containerId);
@@ -1654,7 +1422,6 @@
             
             const timeSlotJSON = JSON.stringify(timeSlots); // onclick用にJSON文字列化
 
-            // ★ window.staffList から該当セクションのスタッフを描画
             window.staffList[sectionKey].forEach((staff, staffIndex) => {
                 
                 let staffHtml = '';
@@ -1751,8 +1518,6 @@
                     }
                 });
                 
-                // スマホ用に、タスクが1つの場合の「+」ボタンは1行目に含めるように変更
-                
                 container.innerHTML += staffHtml;
             });
         }
@@ -1761,9 +1526,8 @@
         
         /**
          * 「割振り確認」タブのタイムラインを生成・表示
-         * ★★★ バグ修正 (v2) ★★★
          */
-        function generateSummaryView() {
+        window.generateSummaryView = function() {
             // ★ window.staffList を参照
             const openTasks = [
                 ...collectTasks(window.staffList.early),
@@ -1774,15 +1538,12 @@
             ].sort();
             
             // --- 開店作業の描画 ---
-            // PC用
             const openHtmlDesktop = createTimelineTable(openTasks, openStaff, openTimeSlots);
             document.getElementById('summary-open-container-desktop').innerHTML = openHtmlDesktop;
-            // スマホ用
             const openHtmlMobile = createTimelineListForMobile(openTasks, openStaff, openTimeSlots);
             document.getElementById('summary-open-container-mobile').innerHTML = openHtmlMobile;
             
             // --- 閉店作業の描画 ---
-            // ★ window.staffList を参照
             const closeTasks = [
                 ...collectTasks(window.staffList.closing_employee),
                 ...collectTasks(window.staffList.closing_alba)
@@ -1791,14 +1552,9 @@
                 ...new Set([...window.staffList.closing_employee.map(s => s.name), ...window.staffList.closing_alba.map(s => s.name)])
             ].sort();
             
-            // ★★★ バグ修正 (v2) ★★★
-            // PC用
             const closeHtmlDesktop = createTimelineTable(closeTasks, closeStaff, closeTimeSlots);
-            // ★修正: 'summary-open-container-desktop' -> 'summary-close-container-desktop'
             document.getElementById('summary-close-container-desktop').innerHTML = closeHtmlDesktop; 
-            // スマホ用
             const closeHtmlMobile = createTimelineListForMobile(closeTasks, closeStaff, closeTimeSlots);
-            // ★修正: 'summary-open-container-mobile' -> 'summary-close-container-mobile'
             document.getElementById('summary-close-container-mobile').innerHTML = closeHtmlMobile;
         }
         
@@ -1907,7 +1663,6 @@
             `;
         }
         
-        // --- ★スマホ用タイムラインリスト生成 (ここから追加) ---
         /**
          * スマホ用のタイムラインリストHTMLを生成
          */
@@ -1958,7 +1713,6 @@
             html += '</div>'; // container end
             return html;
         }
-        // --- (ここまで追加) ---
 
         /**
          * 指定された時間範囲と間隔で時間スロットの配列を生成します。
@@ -1984,6 +1738,24 @@
             return slots;
         }
 
+        // ★グローバル関数を明示的にwindowオブジェクトにアタッチ (安全のため)
+        window.showSubTab = showSubTab;
+        window.openStaffSelect = openStaffSelect;
+        window.addStaff = addStaff;
+        window.autoAssignTasks = autoAssignTasks;
+        window.openTimeSelect = openTimeSelect;
+        window.openTaskSelect = openTaskSelect;
+        window.showDeleteModal = showDeleteModal;
+        window.addTask = addTask;
+        window.cancelDelete = cancelDelete;
+        window.confirmDelete = confirmDelete;
+        window.closeSelectModal = closeSelectModal;
+        window.selectStaff = selectStaff;
+        window.selectTask = selectTask;
+        window.selectTime = selectTime;
+        window.handleChange = handleChange;
+
     </script>
 </body>
 </html>
+
