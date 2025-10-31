@@ -11,11 +11,11 @@
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- ★★★ Firebase SDK（共有版） ★★★ -->
+    <!-- ★★★ Firebase SDK（認証機能なし・DBのみ）★★★ -->
     <script type="module">
         // Firebase SDK imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // ★ 認証(Auth)ライブラリを「完全に」削除しました
         import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase 初期化 ---
@@ -32,39 +32,26 @@
         const appId = "wakatest-46f14"; 
         // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-        let app, auth, db;
-        let userId;
+        let app, db;
         let unsubscribeFromTasks; // onSnapshotのリスナー解除用
         let taskDocRef; // Firestoreのドキュメント参照
 
         /**
-         * Firebaseの初期化と認証、データ監視を開始
+         * Firebaseの初期化とデータ監視を開始
          */
         async function initFirebase() {
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
-                auth = getAuth(app);
                 setLogLevel('Debug'); // デバッグログを有効化
 
                 // Firestoreのパスを定義
                 taskDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_assignments', 'today');
 
-                // 認証状態の監視 (★匿名認証のみ)
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        console.log("Firebase Auth: User is signed in (anonymously).", user.uid);
-                        userId = user.uid;
-                    } else {
-                        console.log("Firebase Auth: Signing in anonymously...");
-                        // ★ここで「匿名認証」を試みます
-                        await signInAnonymously(auth);
-                    }
-                    // 認証が確立したら（userIdがセットされたら）、データ監視を開始
-                    if (userId && !unsubscribeFromTasks) {
-                        startTaskListener();
-                    }
-                });
+                // ★ 認証ロジックをすべて削除
+                
+                // ★ すぐにデータ監視を開始
+                startTaskListener();
 
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
@@ -99,20 +86,24 @@
                 }
                 
                 // ★データ受信時に「編集リスト」と「タイムライン」の両方を更新
-                window.updateStaffLists();
-                window.generateSummaryView();
+                // （現在アクティブなモードに基づいて描画関数を呼ぶ）
+                window.refreshCurrentView();
+
 
             }, (error) => {
                 console.error("Error listening to Firestore:", error);
-                // (エラーがあっても、ローカルの変更は続行できるようにする)
             });
         }
 
         /**
-         * データをFirestoreに保存 (★ログインチェックを削除)
+         * データをFirestoreに保存 (★パスワードチェックはHTML側で行う)
          */
         async function saveStaffListToFirestore() {
-            // ★isLoggedIn のチェックを削除
+            // ★isEditing (パスワード入力済み) でなければ保存しない
+            if (!window.isEditing) {
+                console.warn("Not in editing mode. Save blocked.");
+                return;
+            }
             
             if (!taskDocRef) {
                 console.error("Firestore document reference is not initialized.");
@@ -126,13 +117,12 @@
                 console.log("Data saved successfully.");
             } catch (error) {
                 console.error("Error saving data to Firestore:", error);
-                // (ここでエラーが出ても、画面上の操作は続行される)
             }
         }
 
         // --- グローバルスコープに関数を公開 ---
         window.initFirebase = initFirebase;
-        window.saveStaffListToFirestore = saveStaffListToFirestore; // ★saveStaffListToFirestore に変更
+        window.saveStaffListToFirestore = saveStaffListToFirestore;
     </script>
     <!-- ★★★ Firebase SDK (ここまで) ★★★ -->
 
@@ -295,6 +285,8 @@
         .add-task-button:hover {
             background-color: #e2e8f0; /* Gray-200 */
         }
+        
+        /* ★★★ 編集モードのCSSを削除 ★★★ */
 
 
         /* Table styles (クリーン) */
@@ -361,6 +353,9 @@
             justify-content: space-between;
             align-items: center;
         }
+        
+        /* ★★★ 編集モードオフのCSSを削除 ★★★ */
+
         /* スタッフ追加ボタンのデザイン */
         .staff-select-button {
             padding: 0.625rem 0.75rem; /* 10px 12px */
@@ -553,8 +548,8 @@
 
         /* レスポンシブ (スマホ用) */
         @media (max-width: 767px) {
-            /* ★管理者ボタンを中央タブの下に移動 */
-            .admin-button-container {
+            /* ★「編集モード」ボタンを中央タブの下に移動 */
+            .edit-button-container {
                 position: static;
                 transform: none;
                 margin-top: 0.75rem; /* 12px */
@@ -658,15 +653,22 @@
             </h1>
         </header>
         
-        <!-- ★★★ ログイン機能・メインチブを削除 ★★★ -->
-        <!-- シンプル版では常に「開店・閉店」タブを表示 -->
-        <div id="sub-tab-container" class="mb-6 md:mb-8 flex justify-center">
-            <div class="tab-container">
+        <!-- ★★★ メインコントロール ★★★ -->
+        <div class="mb-6 md:mb-8 flex flex-col md:flex-row justify-center items-center relative main-tab-container">
+            <!-- 開店・閉店タブ (閲覧・編集 共通) -->
+            <div id="sub-tab-container" class="tab-container">
                 <button id="tab-open" class="tab-button sub-tab-button active" onclick="showSubTab('open')">
-                    開店作業 (07:00 - 10:00)
+                    開店作業 (早番)
                 </button>
                 <button id="tab-close" class="tab-button sub-tab-button" onclick="showSubTab('close')">
-                    閉店作業 (22:50 - 23:30)
+                    閉店作業 (遅番)
+                </button>
+            </div>
+            
+            <!-- ★ パスワードボタン -->
+            <div class="edit-button-container md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2">
+                <button id="edit-mode-button" class="add-button secondary-button" onclick="showPasswordModal()">
+                    管理者編集
                 </button>
             </div>
         </div>
@@ -674,222 +676,249 @@
 
         <!-- メインコンテンツ -->
         <main>
-            <!-- ★★★「タスク割振り」と「割振り確認」を統合 ★★★ -->
             
-            <!-- --- 開店作業エリア --- -->
-            <div id="content-open" class="space-y-6 md:space-y-8">
-                <!-- カード型セクション (社員・早番) -->
-                <section class="task-section mb-6 md:mb-8">
-                    <div class="section-header flex justify-between items-center">
-                        <h2 class="section-title">
-                            社員・早番
-                        </h2>
-                        <button onclick="autoAssignTasks('early', 'open')" class="add-button secondary-button">
-                            自動割振り
-                        </button>
-                    </div>
-                    <div class="section-content space-y-4">
-                        <!-- スタッフ追加フォーム -->
-                        <div class="flex space-x-2">
-                            <button id="add-staff-button-early" 
-                                    class="custom-select-button staff-select-button placeholder flex-grow" 
-                                    onclick="openStaffSelect('early', 'employees')"
-                                    data-placeholder="--- 社員を検索・選択 ---">
-                                <span>--- 社員を検索・選択 ---</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+            <!-- ★★★ 編集モード専用コンテナ (デフォルトは非表示) ★★★ -->
+            <div id="edit-mode-container" class="hidden">
+                <!-- --- 開店作業エリア (編集用) --- -->
+                <div id="edit-content-open" class="space-y-6 md:space-y-8">
+                    <!-- カード型セクション (社員・早番) -->
+                    <section class="task-section mb-6 md:mb-8">
+                        <div class="section-header flex justify-between items-center">
+                            <h2 class="section-title">
+                                社員・早番 (編集)
+                            </h2>
+                            <button onclick="autoAssignTasks('early', 'open')" class="add-button secondary-button">
+                                自動割振り
                             </button>
-                            <button onclick="addStaff('early')" class="add-button">追加</button>
                         </div>
-                        <!-- スタッフ一覧テーブル -->
-                        <div>
-                            <table class="task-table">
-                                <thead>
-                                    <tr>
-                                        <th class="w-1/4">スタッフ名</th>
-                                        <th class="w-1/6">開始</th>
-                                        <th class="w-1/6">終了</th>
-                                        <th class="w-2/5">担当タスク</th>
-                                        <th class="w-auto"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="staff-list-open-early">
-                                    <!-- スタッフ行はJSで描画 -->
-                                </tbody>
-                            </table>
+                        <div class="section-content space-y-4">
+                            <!-- スタッフ追加フォーム -->
+                            <div class="flex space-x-2">
+                                <button id="add-staff-button-early" 
+                                        class="custom-select-button staff-select-button placeholder flex-grow" 
+                                        onclick="openStaffSelect('early', 'employees')"
+                                        data-placeholder="--- 社員を検索・選択 ---">
+                                    <span>--- 社員を検索・選択 ---</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button onclick="addStaff('early')" class="add-button">追加</button>
+                            </div>
+                            <!-- スタッフ一覧テーブル -->
+                            <div>
+                                <table class="task-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-1/4">スタッフ名</th>
+                                            <th class="w-1/6">開始</th>
+                                            <th class="w-1/6">終了</th>
+                                            <th class="w-2/5">担当タスク</th>
+                                            <th class="w-auto"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="staff-list-open-early">
+                                        <!-- スタッフ行はJSで描画 -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
 
-                <!-- カード型セクション (早番アルバイト) -->
-                <section class="task-section mb-6 md:mb-8">
-                    <div class="section-header flex justify-between items-center">
-                        <h2 class="section-title">
-                            早番アルバイト
-                        </h2>
-                        <button onclick="autoAssignTasks('late', 'open')" class="add-button secondary-button">
-                            自動割振り
-                        </button>
-                    </div>
-                    <div class="section-content space-y-4">
-                        <!-- スタッフ追加フォーム -->
-                        <div class="flex space-x-2">
-                            <button id="add-staff-button-late" 
-                                    class="custom-select-button staff-select-button placeholder flex-grow" 
-                                    onclick="openStaffSelect('late', 'alba_early')"
-                                    data-placeholder="--- 早番アルバイトを検索・選択 ---">
-                                <span>--- 早番アルバイトを検索・選択 ---</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    <!-- カード型セクション (早番アルバイト) -->
+                    <section class="task-section mb-6 md:mb-8">
+                        <div class="section-header flex justify-between items-center">
+                            <h2 class="section-title">
+                                早番アルバイト (編集)
+                            </h2>
+                            <button onclick="autoAssignTasks('late', 'open')" class="add-button secondary-button">
+                                自動割振り
                             </button>
-                            <button onclick="addStaff('late')" class="add-button">追加</button>
                         </div>
-                        <div>
-                            <table class="task-table">
-                                <thead>
-                                    <tr>
-                                        <th class="w-1/4">スタッフ名</th>
-                                        <th class="w-1/6">開始</th>
-                                        <th class="w-1/6">終了</th>
-                                        <th class="w-2/5">担当タスク</th>
-                                        <th class="w-auto"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="staff-list-open-late">
-                                    <!-- スタッフ行はJSで描画 -->
-                                </tbody>
-                            </table>
+                        <div class="section-content space-y-4">
+                            <!-- スタッフ追加フォーム -->
+                            <div class="flex space-x-2">
+                                <button id="add-staff-button-late" 
+                                        class="custom-select-button staff-select-button placeholder flex-grow" 
+                                        onclick="openStaffSelect('late', 'alba_early')"
+                                        data-placeholder="--- 早番アルバイトを検索・選択 ---">
+                                    <span>--- 早番アルバイトを検索・選択 ---</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button onclick="addStaff('late')" class="add-button">追加</button>
+                            </div>
+                            <div>
+                                <table class="task-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-1/4">スタッフ名</th>
+                                            <th class="w-1/6">開始</th>
+                                            <th class="w-1/6">終了</th>
+                                            <th class="w-2/5">担当タスク</th>
+                                            <th class="w-auto"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="staff-list-open-late">
+                                        <!-- スタッフ行はJSで描画 -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                </section>
-                
-                <!-- 開店作業 タイムライン -->
-                <section class="mb-10">
-                    <div class="flex justify-between items-center mb-5">
-                        <h2 class="section-title" style="border-color: #4f46e5;">
-                            開店作業 タイムライン
-                        </h2>
-                    </div>
-                    <div id="summary-open-container">
-                        <!-- PC用 (横スクロール) -->
-                        <div id="summary-open-container-desktop" class="timeline-container hidden md:block">
-                            <!-- PC用タイムラインはJSで描画 -->
-                        </div>
-                        <!-- スマホ用 (縦リスト) -->
-                        <div id="summary-open-container-mobile" class="md:hidden">
-                            <!-- スマホ用リストはJSで描画 -->
-                        </div>
-                    </div>
-                </section>
-            </div>
+                    </section>
+                </div>
 
-            <!-- --- 閉店作業エリア --- -->
-            <div id="content-close" class="space-y-6 md:space-y-8 hidden">
-                <!-- カード型セクション (社員・遅番) -->
-                <section class="task-section mb-6 md:mb-8">
-                    <div class="section-header flex justify-between items-center">
-                        <h2 class="section-title">
-                            社員・遅番
-                        </h2>
-                         <button onclick="autoAssignTasks('closing_employee', 'close')" class="add-button secondary-button">
-                            自動割振り
-                        </button>
-                    </div>
-                    <div class="section-content space-y-4">
-                        <!-- スタッフ追加フォーム -->
-                        <div class="flex space-x-2">
-                            <button id="add-staff-button-closing_employee" 
-                                    class="custom-select-button staff-select-button placeholder flex-grow" 
-                                    onclick="openStaffSelect('closing_employee', 'employees')"
-                                    data-placeholder="--- 社員を検索・選択 ---">
-                                <span>--- 社員を検索・選択 ---</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                <!-- --- 閉店作業エリア (編集用) --- -->
+                <div id="edit-content-close" class="space-y-6 md:space-y-8 hidden">
+                    <!-- カード型セクション (社員・遅番) -->
+                    <section class="task-section mb-6 md:mb-8">
+                        <div class="section-header flex justify-between items-center">
+                            <h2 class="section-title">
+                                社員・遅番 (編集)
+                            </h2>
+                             <button onclick="autoAssignTasks('closing_employee', 'close')" class="add-button secondary-button">
+                                自動割振り
                             </button>
-                            <button onclick="addStaff('closing_employee')" class="add-button">追加</button>
                         </div>
-                        <div>
-                            <table class="task-table">
-                                <thead>
-                                    <tr>
-                                        <th class="w-1/4">スタッフ名</th>
-                                        <th class="w-1/6">開始</th>
-                                        <th class="w-1/6">終了</th>
-                                        <th class="w-2/5">担当タスク</th>
-                                        <th class="w-auto"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="staff-list-close-employee">
-                                    <!-- スタッフ行はJSで描画 -->
-                                </tbody>
-                            </table>
+                        <div class="section-content space-y-4">
+                            <!-- スタッフ追加フォーム -->
+                            <div class="flex space-x-2">
+                                <button id="add-staff-button-closing_employee" 
+                                        class="custom-select-button staff-select-button placeholder flex-grow" 
+                                        onclick="openStaffSelect('closing_employee', 'employees')"
+                                        data-placeholder="--- 社員を検索・選択 ---">
+                                    <span>--- 社員を検索・選択 ---</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button onclick="addStaff('closing_employee')" class="add-button">追加</button>
+                            </div>
+                            <div>
+                                <table class="task-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-1/4">スタッフ名</th>
+                                            <th class="w-1/6">開始</th>
+                                            <th class="w-1/6">終了</th>
+                                            <th class="w-2/5">担当タスク</th>
+                                            <th class="w-auto"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="staff-list-close-employee">
+                                        <!-- スタッフ行はJSで描画 -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
 
-                <!-- カード型セクション (アルバイト・遅番) -->
-                <section class="task-section mb-6 md:mb-8">
-                    <div class="section-header flex justify-between items-center">
-                        <h2 class="section-title">
-                            アルバイト・遅番
-                        </h2>
-                         <button onclick="autoAssignTasks('closing_alba', 'close')" class="add-button secondary-button">
-                            自動割振り
-                        </button>
-                    </div>
-                    <div class="section-content space-y-4">
-                        <!-- スタッフ追加フォーム -->
-                        <div class="flex space-x-2">
-                            <button id="add-staff-button-closing_alba" 
-                                    class="custom-select-button staff-select-button placeholder flex-grow" 
-                                    onclick="openStaffSelect('closing_alba', 'alba_late')"
-                                    data-placeholder="--- 遅番アルバイトを検索・選択 ---">
-                                <span>--- 遅番アルバイトを検索・選択 ---</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    <!-- カード型セクション (アルバイト・遅番) -->
+                    <section class="task-section mb-6 md:mb-8">
+                        <div class="section-header flex justify-between items-center">
+                            <h2 class="section-title">
+                                アルバイト・遅番 (編集)
+                            </h2>
+                             <button onclick="autoAssignTasks('closing_alba', 'close')" class="add-button secondary-button">
+                                自動割振り
                             </button>
-                            <button onclick="addStaff('closing_alba')" class="add-button">追加</button>
                         </div>
-                        <div>
-                            <table class="task-table">
-                                <thead>
-                                    <tr>
-                                        <th class="w-1/4">スタッフ名</th>
-                                        <th class="w-1/6">開始</th>
-                                        <th class="w-1/6">終了</th>
-                                        <th class="w-2/5">担当タスク</th>
-                                        <th class="w-auto"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="staff-list-close-alba">
-                                    <!-- スタッフ行はJSで描画 -->
-                                </tbody>
-                            </table>
+                        <div class="section-content space-y-4">
+                            <!-- スタッフ追加フォーム -->
+                            <div class="flex space-x-2">
+                                <button id="add-staff-button-closing_alba" 
+                                        class="custom-select-button staff-select-button placeholder flex-grow" 
+                                        onclick="openStaffSelect('closing_alba', 'alba_late')"
+                                        data-placeholder="--- 遅番アルバイトを検索・選択 ---">
+                                    <span>--- 遅番アルバイトを検索・選択 ---</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button onclick="addStaff('closing_alba')" class="add-button">追加</button>
+                            </div>
+                            <div>
+                                <table class="task-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-1/4">スタッフ名</th>
+                                            <th class="w-1/6">開始</th>
+                                            <th class="w-1/6">終了</th>
+                                            <th class="w-2/5">担当タスク</th>
+                                            <th class="w-auto"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="staff-list-close-alba">
+                                        <!-- スタッフ行はJSで描画 -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                </section>
-                
-                <!-- 閉店作業 タイムライン -->
-                <section class="mb-10">
-                    <div class="flex justify-between items-center mb-5">
-                        <h2 class="section-title" style="border-color: #4f46e5;">
-                            閉店作業 タイムライン
-                        </h2>
-                    </div>
-                     <div id="summary-close-container">
-                        <!-- PC用 (横スクロール) -->
-                        <div id="summary-close-container-desktop" class="timeline-container hidden md:block">
-                            <!-- PC用タイムラインはJSで描画 -->
-                        </div>
-                        <!-- スマホ用 (縦リスト) -->
-                        <div id="summary-close-container-mobile" class="md:hidden">
-                            <!-- スマホ用リストはJSで描画 -->
-                        </div>
-                     </div>
-                </section>
+                    </section>
+                </div>
             </div>
             
+            <!-- ★★★ 閲覧モード専用コンテナ (デフォルトで表示) ★★★ -->
+            <div id="view-mode-container" class="">
+                 <!-- --- 開店作業エリア (閲覧用) --- -->
+                <div id="view-content-open">
+                    <!-- 開店作業 タイムライン -->
+                    <section class="mb-10">
+                        <div class="flex justify-between items-center mb-5">
+                            <h2 class="section-title" style="border-color: #4f46e5;">
+                                開店作業 タイムライン
+                            </h2>
+                        </div>
+                        <div id="summary-open-container">
+                            <!-- PC用 (横スクロール) -->
+                            <div id="summary-open-container-desktop" class="timeline-container hidden md:block">
+                                <!-- PC用タイムラインはJSで描画 -->
+                            </div>
+                            <!-- スマホ用 (縦リスト) -->
+                            <div id="summary-open-container-mobile" class="md:hidden">
+                                <!-- スマホ用リストはJSで描画 -->
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                
+                <!-- --- 閉店作業エリア (閲覧用) --- -->
+                <div id="view-content-close" class="hidden">
+                    <!-- 閉店作業 タイムライン -->
+                    <section class="mb-10">
+                        <div class="flex justify-between items-center mb-5">
+                            <h2 class="section-title" style="border-color: #4f46e5;">
+                                閉店作業 タイムライン
+                            </h2>
+                        </div>
+                         <div id="summary-close-container">
+                            <!-- PC用 (横スクロール) -->
+                            <div id="summary-close-container-desktop" class="timeline-container hidden md:block">
+                                <!-- PC用タイムラインはJSで描画 -->
+                            </div>
+                            <!-- スマホ用 (縦リスト) -->
+                            <div id="summary-close-container-mobile" class="md:hidden">
+                                <!-- スマホ用リストはJSで描画 -->
+                            </div>
+                         </div>
+                    </section>
+                </div>
+            </div>
+
         </main>
 
     </div>
 
-    <!-- ★★★ ログインモーダルを削除 ★★★ -->
+    <!-- ★★★ パスワードモーダル ★★★ -->
+    <div id="password-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4">管理者パスワード</h3>
+            <p class="mb-4">編集するにはパスワードを入力してください。</p>
+            <input id="password-input" type="password" class="w-full p-2 border border-gray-300 rounded-md mb-2" placeholder="パスワード">
+            <p id="password-error" class="text-red-500 text-sm mb-4 hidden">パスワードが違います。</p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="closePasswordModal()" class="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 transition">
+                    キャンセル
+                </button>
+                <button onclick="checkPassword()" class="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- 削除確認モーダル -->
     <div id="delete-modal" class="modal-overlay hidden">
@@ -951,7 +980,9 @@
         
         // --- アプリケーション状態 ---
 
-        // ★★★ ログイン状態 (isLoggedIn) を削除 ★★★
+        // ★ 編集モード状態 (パスワード入力済みか)
+        window.isEditing = false;
+        const EDIT_PASSWORD = "admin"; // ★ パスワード
 
         // ★タスク割り振りデータ (グローバルスコープ)
         window.staffList = {
@@ -980,14 +1011,10 @@
         const openTimeSlots = generateTimeSlots('07:00', '10:00', 15);
         const closeTimeSlots = generateTimeSlots('22:45', '23:30', 15);
         
-        // ★★★ ローカルストレージのキーを削除 ★★★
-        // const LOCAL_STORAGE_KEY = "taskAssignmentData_wakatest";
-
-
         // --- アプリケーションロジック ---
 
         document.addEventListener('DOMContentLoaded', () => {
-            // ★★★ Firebaseの初期化を「再追加」 ★★★
+            // ★ Firebaseの初期化を実行
             if (window.initFirebase) {
                 window.initFirebase();
             }
@@ -1002,30 +1029,36 @@
                 }
             });
             
-            // ★★★ ログインモーダルのEnterキー処理を削除 ★★★
+            // ★ パスワードモーダルでEnterキーを押したときの処理
+            document.getElementById('password-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    checkPassword();
+                }
+            });
         });
         
-        // ★★★ Firebaseの startTaskListener は <head> の <script type="module"> 内にあります ★★★
-
-        // ★★★ saveStaffListToLocalStorage と loadStaffListFromLocalStorage を削除 ★★★
-        // (saveStaffListToFirestore は <head> の <script type="module"> 内にあります)
-
-
+        
         /**
-         * ★ビューの再描画 (シンプル版)
+         * ★ データ受信時（onSnapshot）またはモード切替時にビューを更新
          */
         window.refreshCurrentView = function() {
-            // ★この関数は、FirebaseのonSnapshotが呼ぶ（<head>内）
-            // ★ただし、onSnapshotが呼ぶのは staffList の更新と、
-            // 　updateStaffLists(), generateSummaryView() の呼び出しのみ。
-            // 　この関数自体は不要になった。
+            // ★ 編集リスト（テーブル）とタイムライン（サマリー）の両方を常にデータ更新
+            window.updateStaffLists();
+            window.generateSummaryView();
+            
+            // ★ 現在のタブ状態に基づいて、表示/非表示を切り替える
+            const isOpen = document.getElementById('tab-open').classList.contains('active');
+            showSubTab(isOpen ? 'open' : 'close');
         }
 
 
         /**
-         * ★ページ読み込み時のUI初期状態を設定 (シンプル版)
+         * ★ページ読み込み時のUI初期状態を設定 (パスワード版)
          */
         function setupInitialView() {
+            // ★ 編集モードをオフに (閲覧モードで開始)
+            setEditingMode(false);
+            
             // ★デフォルトは「開店」タブを表示
             showSubTab('open');
             
@@ -1035,38 +1068,100 @@
             generateSummaryView();
         }
 
-        // ★★★ メインの showTab 関数を削除 ★★★
-        
         /**
-         * サブのタブ（開店/閉店）を切り替えます。
+         * ★ サブのタブ（開店/閉店）を切り替えます (閲覧/編集 両対応)
          */
         function showSubTab(tabName) {
             const isOpen = tabName === 'open';
-            document.getElementById('content-open').classList.toggle('hidden', !isOpen);
-            document.getElementById('content-close').classList.toggle('hidden', isOpen);
+            
+            // --- 編集モードのUI ---
+            document.getElementById('edit-content-open').classList.toggle('hidden', !isOpen);
+            document.getElementById('edit-content-close').classList.toggle('hidden', isOpen);
+            
+            // --- 閲覧モードのUI ---
+            document.getElementById('view-content-open').classList.toggle('hidden', !isOpen);
+            document.getElementById('view-content-close').classList.toggle('hidden', isOpen);
+            
+            // --- タブボタンの active 状態 ---
             document.getElementById('tab-open').classList.toggle('active', isOpen);
             document.getElementById('tab-close').classList.toggle('active', !isOpen);
         }
         
-        // ★★★ ログイン関連の関数 (showLoginModal, closeLoginModal, checkPassword, logout) をすべて削除 ★★★
-        
+        // ★★★ パスワード（編集モード）関連の関数 ★★★
 
-        // --- カスタム選択モーダル関連 ---
+        /**
+         * パスワードモーダルを表示
+         */
+        function showPasswordModal() {
+            // ★ 既に編集モードの場合は、編集モードをオフにする
+            if (window.isEditing) {
+                setEditingMode(false);
+                return;
+            }
+            // ★ 閲覧モードの場合は、パスワードモーダルを開く
+            document.getElementById('password-modal').classList.remove('hidden');
+            document.getElementById('password-input').value = ""; // 入力欄クリア
+            document.getElementById('password-error').classList.add('hidden'); // エラー非表示
+            document.getElementById('password-input').focus();
+        }
+
+        /**
+         * パスワードモーダルを閉じる
+         */
+        function closePasswordModal() {
+            document.getElementById('password-modal').classList.add('hidden');
+        }
+
+        /**
+         * パスワードをチェック
+         */
+        function checkPassword() {
+            const input = document.getElementById('password-input').value;
+            const errorEl = document.getElementById('password-error');
+            
+            if (input === EDIT_PASSWORD) {
+                // 認証成功
+                closePasswordModal();
+                setEditingMode(true); // ★ 編集モードをオン
+            } else {
+                // 認証失敗
+                errorEl.classList.remove('hidden');
+            }
+        }
         
         /**
-         * スタッフ選択モーダルを開きます。
+         * 編集モードのオン/オフを切り替え
          */
+        function setEditingMode(isEditing) {
+            window.isEditing = isEditing;
+            
+            // ★ 閲覧モード と 編集モード のコンテナを切り替え
+            document.getElementById('view-mode-container').classList.toggle('hidden', isEditing);
+            document.getElementById('edit-mode-container').classList.toggle('hidden', !isEditing);
+            
+            const editButton = document.getElementById('edit-mode-button');
+            if (isEditing) {
+                editButton.textContent = "閲覧モードに戻る";
+                editButton.classList.remove('secondary-button'); // 通常ボタンの色に戻す
+            } else {
+                editButton.textContent = "管理者編集";
+                editButton.classList.add('secondary-button');
+            }
+        }
+        
+        // --- カスタム選択モーダル関連 ---
+        
         function openStaffSelect(sectionKey, masterListKey) {
-            const masterList = masterStaffList[masterListKey]; // ★修正: masterList[masterListKey]
-            // ★ window.staffList を参照
+            // ★ 編集モードガード (念のため)
+            if (!window.isEditing) return;
+            
+            const masterList = masterStaffList[masterListKey]; 
             const currentStaff = window.staffList[sectionKey].map(s => s.name);
             const selectedStaffName = staffToAdd[sectionKey];
-            
-            // 既にリストにいるスタッフを除外
             const options = masterList.filter(name => !currentStaff.includes(name));
             
             const modalBody = document.getElementById('select-modal-body');
-            modalBody.innerHTML = ''; // クリア
+            modalBody.innerHTML = ''; 
             
             if (options.length === 0) {
                  modalBody.innerHTML = `<div class="p-4 text-center text-gray-500">追加できるスタッフがいません。</div>`;
@@ -1084,7 +1179,6 @@
             document.getElementById('select-modal-title').textContent = "スタッフを選択";
             document.getElementById('select-modal').classList.remove('hidden');
             
-            // 選択状態を保存
             currentSelect = {
                 type: 'staff',
                 buttonEl: document.getElementById(`add-staff-button-${sectionKey}`),
@@ -1093,30 +1187,21 @@
             };
         }
 
-        /**
-         * モーダルでスタッフを選択
-         */
         function selectStaff(sectionKey, staffName) {
             staffToAdd[sectionKey] = staffName;
-            
-            // ボタンのテキストを更新
             const buttonEl = document.getElementById(`add-staff-button-${sectionKey}`);
             buttonEl.querySelector('span').textContent = staffName;
             buttonEl.classList.remove('placeholder');
-            
             closeSelectModal();
         }
 
-        /**
-         * タスク選択モーダルを開きます。
-         */
         function openTaskSelect(sectionKey, staffIndex, taskIndex, taskListName) {
+            if (!window.isEditing) return;
             const tasks = taskLists[taskListName];
-            // ★ window.staffList を参照
             const currentValue = window.staffList[sectionKey][staffIndex].tasks[taskIndex].task;
             
             const modalBody = document.getElementById('select-modal-body');
-            modalBody.innerHTML = `<div class="select-modal-option clear-option" onclick="selectTask('', '--- タスクを選択 ---')">--- タスクを選択 ---</div>`; // クリアオプション
+            modalBody.innerHTML = `<div class="select-modal-option clear-option" onclick="selectTask('', '--- タスクを選択 ---')">--- タスクを選択 ---</div>`; 
             
             tasks.forEach(task => {
                 const isSelected = task === currentValue;
@@ -1130,7 +1215,6 @@
             document.getElementById('select-modal-title').textContent = "タスクを選択";
             document.getElementById('select-modal').classList.remove('hidden');
             
-            // 選択状態を保存
             currentSelect = {
                 type: 'task',
                 buttonEl: document.getElementById(`task-btn-${sectionKey}-${staffIndex}-${taskIndex}`),
@@ -1142,15 +1226,12 @@
             };
         }
         
-        /**
-         * 時間選択モーダルを開きます。
-         */
         function openTimeSelect(sectionKey, staffIndex, taskIndex, field, timeSlotList) {
-            // ★ window.staffList を参照
+            if (!window.isEditing) return;
             const currentValue = window.staffList[sectionKey][staffIndex].tasks[taskIndex][field];
             
             const modalBody = document.getElementById('select-modal-body');
-            modalBody.innerHTML = `<div class="select-modal-option clear-option" onclick="selectTime('--')">--</div>`; // クリアオプション
+            modalBody.innerHTML = `<div class="select-modal-option clear-option" onclick="selectTime('--')">--</div>`; 
             
             timeSlotList.forEach(time => {
                 const isSelected = time === currentValue;
@@ -1165,7 +1246,6 @@
             document.getElementById('select-modal-title').textContent = title;
             document.getElementById('select-modal').classList.remove('hidden');
             
-            // 選択状態を保存
             currentSelect = {
                 type: 'time',
                 buttonEl: document.getElementById(`${field}-btn-${sectionKey}-${staffIndex}-${taskIndex}`),
@@ -1177,9 +1257,6 @@
             };
         }
         
-        /**
-         * モーダルで選択肢を決定（タスク・時間共通）
-         */
         function selectTask(value, text) {
             if (currentSelect.callback) {
                 currentSelect.callback(value, text);
@@ -1194,17 +1271,11 @@
             closeSelectModal();
         }
 
-        /**
-         * 選択モーダルを閉じます。
-         */
         function closeSelectModal() {
             document.getElementById('select-modal').classList.add('hidden');
             currentSelect = { type: null, callback: null, buttonEl: null, currentValue: null };
         }
         
-        /**
-         * 選択ボタンの表示を更新
-         */
         function updateSelectButton(buttonEl, text, isPlaceholder) {
             if (buttonEl) {
                 buttonEl.querySelector('span').textContent = text;
@@ -1212,14 +1283,15 @@
             }
         }
         
-        // --- スタッフ・タスク操作 (★ Firestore保存処理に修正) ---
+        // --- スタッフ・タスク操作 (★ 編集モードチェックは不要) ---
+        // (これらの関数は編集モードのUIからしか呼ばれないため)
 
         /**
          * スタッフをリストに追加します。
          */
         function addStaff(sectionKey) {
             const staffName = staffToAdd[sectionKey];
-            if (!staffName) return; // 名前が選択されていない
+            if (!staffName) return; 
 
             if (window.staffList[sectionKey].find(staff => staff.name === staffName)) {
                 return;
@@ -1235,9 +1307,7 @@
             updateSelectButton(buttonEl, buttonEl.getAttribute('data-placeholder'), true);
 
             updateStaffLists();
-
-            // ★ Firestoreに保存
-            window.saveStaffListToFirestore(); // ★関数名を修正
+            window.saveStaffListToFirestore();
         }
 
         /**
@@ -1246,9 +1316,7 @@
         function addTask(sectionKey, staffIndex) {
             window.staffList[sectionKey][staffIndex].tasks.push({ start: "", end: "", task: "" });
             updateStaffLists();
-
-            // ★ Firestoreに保存
-            window.saveStaffListToFirestore(); // ★関数名を修正
+            window.saveStaffListToFirestore();
         }
 
         /**
@@ -1292,9 +1360,7 @@
             
             cancelDelete(); // モーダルを閉じる
             updateStaffLists(); // リストを再描画
-
-            // ★ Firestoreに保存
-            window.saveStaffListToFirestore(); // ★関数名を修正
+            window.saveStaffListToFirestore();
         }
 
         /**
@@ -1303,10 +1369,7 @@
         function handleChange(sectionKey, staffIndex, taskIndex, field, value) {
             try {
                 window.staffList[sectionKey][staffIndex].tasks[taskIndex][field] = value;
-                
-                // ★ (重要) 変更が完了したタイミングで保存
-                window.saveStaffListToFirestore(); // ★関数名を修正
-
+                window.saveStaffListToFirestore(); 
             } catch (e) {
                 console.error("Error updating data:", {sectionKey, staffIndex, taskIndex, field, value}, e);
             }
@@ -1395,9 +1458,7 @@
             }
             
             updateStaffLists();
-
-            // ★ Firestoreに保存
-            window.saveStaffListToFirestore(); // ★関数名を修正
+            window.saveStaffListToFirestore(); 
         }
 
 
@@ -1754,6 +1815,11 @@
         window.selectTask = selectTask;
         window.selectTime = selectTime;
         window.handleChange = handleChange;
+        // ★ パスワード用の関数
+        window.showPasswordModal = showPasswordModal;
+        window.closePasswordModal = closePasswordModal;
+        window.checkPassword = checkPassword;
+        window.setEditingMode = setEditingMode;
 
     </script>
 </body>
