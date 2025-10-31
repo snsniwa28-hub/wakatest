@@ -15,27 +15,25 @@
     <script type="module">
         // Firebase SDK imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase 初期化 ---
 
-        // ▼▼▼▼▼【重要】ここにご自身のFirebase設定を貼り付けてください ▼▼▼▼▼
-        // Firebaseプロジェクト設定 > 全般 > マイアプリ でWebアプリの設定オブジェクトを取得できます。
+        // ▼▼▼▼▼【重要】お客様の設定に置き換え済みです ▼▼▼▼▼
         const firebaseConfig = {
-          apiKey: "AIz...YOUR_API_KEY",
-          authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-          projectId: "YOUR_PROJECT_ID",
-          storageBucket: "YOUR_PROJECT_ID.appspot.com",
-          messagingSenderId: "...",
-          appId: "1:..."
+          apiKey: "AIzaSyBdjf2YJIo9OSJhPDBuEJAxqjVvS0qTN3E",
+          authDomain: "wakatest-46f14.firebaseapp.com",
+          projectId: "wakatest-46f14",
+          storageBucket: "wakatest-46f14.firebasestorage.app",
+          messagingSenderId: "770004156053",
+          appId: "1:770004156053:web:04645f8fa745b07c03659c"
         };
 
         // ▼▼▼▼▼【重要】Cloudflare Pages用のアプリIDを設定してください ▼▼▼▼▼
         // このIDは、Firestoreのデータパス /artifacts/{appId}/... で使われます。
-        // Canvas環境とは別の、本番用のデータ場所を指定します。
-        // 例: "task-bot-prod-2025"
-        const appId = "task-bot-cloudflare"; 
+        // ★プロジェクトID "wakatest-46f14" を "appId" として使用します。
+        const appId = "wakatest-46f14"; 
         // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
         // Cloudflareでは __initial_auth_token は使えません。
@@ -80,15 +78,9 @@
                         userId = user.uid;
                     } else {
                         console.log("Firebase Auth: User is signed out. Signing in...");
-                        // 認証トークンがあればそれを使用、なければ匿名認証
-                        if (initialAuthToken) { // (Cloudflareでは常にnull)
-                            console.log("Signing in with custom token...");
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            // ★ Cloudflareでは常に匿名認証を使用
-                            console.log("Signing in anonymously...");
-                            await signInAnonymously(auth);
-                        }
+                        // ★ Cloudflareでは常に匿名認証を使用
+                        console.log("Signing in anonymously...");
+                        await signInAnonymously(auth);
                         // 認証が成功すると、このonAuthStateChangedリスナーが再度呼ばれる
                     }
 
