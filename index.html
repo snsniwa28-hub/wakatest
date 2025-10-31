@@ -285,9 +285,6 @@
         .add-task-button:hover {
             background-color: #e2e8f0; /* Gray-200 */
         }
-        
-        /* ★★★ 編集モードのCSSを削除 ★★★ */
-
 
         /* Table styles (クリーン) */
         .task-table {
@@ -353,8 +350,6 @@
             justify-content: space-between;
             align-items: center;
         }
-        
-        /* ★★★ 編集モードオフのCSSを削除 ★★★ */
 
         /* スタッフ追加ボタンのデザイン */
         .staff-select-button {
@@ -543,6 +538,39 @@
             background-color: #fecaca; /* Red-200 */
             border-color: #f87171; /* Red-400 */
             color: #991b1b; /* Red-800 */
+        }
+        /* ★ 朝礼タスクの色 (緑) */
+        .task-bar.briefing-task {
+            background-color: #d1fae5; /* Green-100 */
+            border-color: #6ee7b7; /* Green-300 */
+            color: #065f46; /* Green-800 */
+        }
+        /* ★ 金銭計数タスクの色 (黄) */
+        .task-bar.money-task {
+            background-color: #fef9c3; /* Yellow-100 */
+            border-color: #fde047; /* Yellow-300 */
+            color: #854d0e; /* Yellow-800 */
+        }
+         /* ★ 個人業務タスクの色 (グレー) */
+        .task-bar.free-task {
+            background-color: #f1f5f9; /* Gray-100 */
+            border-color: #cbd5e1; /* Gray-300 */
+            color: #475569; /* Gray-600 */
+            font-style: italic;
+        }
+        /* ★ 立駐タスクの色 (青) */
+        .task-bar.parking-task {
+            background-color: #dbeafe; /* Blue-100 */
+            border-color: #93c5fd; /* Blue-300 */
+            color: #1e40af; /* Blue-800 */
+        }
+        /* ★ 閉店社員タスクの色 (紫) */
+        .task-bar.lock-task,
+        .task-bar.toolbox-task,
+        .task-bar.handoff-task {
+            background-color: #e9d5ff; /* Purple-100 */
+            border-color: #c084fc; /* Purple-300 */
+            color: #581c87; /* Purple-800 */
         }
 
 
@@ -967,15 +995,37 @@
             ]
         };
 
+        // ★★★ タスクリスト (強化版) ★★★
         const taskLists = {
             open: [
-                "金銭計数", "近隣店チェック・外販", "空調、配電系", "抽選準備", 
-                "抽選", "台チェック", "販促確認", "朝礼"
+                // "金銭計数", // ★特別タスク (社員のみ)
+                "近隣店チェック・外販",
+                "空調、配電系",
+                "抽選準備",
+                "抽選",
+                "台チェック",
+                "販促確認",
+                // "朝礼" // ★特別タスク (早番全員)
             ],
             close: [
-                "立駐2人", "事務所清掃", "島上クイックルワイパー", "引継ぎ記載", 
-                "施錠確認", "飲み残し", "工具箱チェック"
+                // "立駐2人", // ★特別タスク (各グループ1人)
+                "事務所清掃",
+                "島上クイックルワイパー",
+                // "引継ぎ記載", // ★特別タスク (社員のみ)
+                // "施錠確認", // ★特別タスク (社員のみ)
+                "飲み残し",
+                // "工具箱チェック", // ★特別タスク (社員のみ)
             ]
+        };
+        // ★ 特別なタスクの定義
+        const SPECIAL_TASKS = {
+            BRIEFING: "朝礼",
+            MONEY_COUNT: "金銭計数",
+            FREE_TASK: "自由、個人業務",
+            PARKING: "立駐2人", // ★変更なし
+            LOCK_CHECK: "施錠確認", // ★変更なし
+            TOOLBOX_CHECK: "工具箱チェック", // ★変更なし
+            HANDOFF: "引継ぎ記載" // ★追加
         };
         
         // --- アプリケーション状態 ---
@@ -1197,7 +1247,15 @@
 
         function openTaskSelect(sectionKey, staffIndex, taskIndex, taskListName) {
             if (!window.isEditing) return;
-            const tasks = taskLists[taskListName];
+            
+            // ★ 「朝礼」などは手動選択リストに表示しない
+            let tasks = [...taskLists[taskListName]]; 
+            
+            // ★ 手動で「自由、個人業務」も選べるようにする
+            if (!tasks.includes(SPECIAL_TASKS.FREE_TASK)) {
+                tasks.push(SPECIAL_TASKS.FREE_TASK);
+            }
+            
             const currentValue = window.staffList[sectionKey][staffIndex].tasks[taskIndex].task;
             
             const modalBody = document.getElementById('select-modal-body');
@@ -1283,12 +1341,8 @@
             }
         }
         
-        // --- スタッフ・タスク操作 (★ 編集モードチェックは不要) ---
-        // (これらの関数は編集モードのUIからしか呼ばれないため)
+        // --- スタッフ・タスク操作 (編集モードのUIからのみ呼ばれる) ---
 
-        /**
-         * スタッフをリストに追加します。
-         */
         function addStaff(sectionKey) {
             const staffName = staffToAdd[sectionKey];
             if (!staffName) return; 
@@ -1310,18 +1364,12 @@
             window.saveStaffListToFirestore();
         }
 
-        /**
-         * 特定のスタッフにタスクを追加します。
-         */
         function addTask(sectionKey, staffIndex) {
             window.staffList[sectionKey][staffIndex].tasks.push({ start: "", end: "", task: "" });
             updateStaffLists();
             window.saveStaffListToFirestore();
         }
 
-        /**
-         * 削除モーダルを表示します。
-         */
         function showDeleteModal(type, sectionKey, staffIndex, taskIndex = null) {
             deleteInfo = { type, sectionKey, staffIndex, taskIndex };
             const modal = document.getElementById('delete-modal');
@@ -1336,17 +1384,11 @@
             modal.classList.remove('hidden');
         }
 
-        /**
-         * 削除をキャンセルします。
-         */
         function cancelDelete() {
             document.getElementById('delete-modal').classList.add('hidden');
             deleteInfo = { type: null, sectionKey: null, staffIndex: null, taskIndex: null };
         }
 
-        /**
-         * 削除を確定実行します。
-         */
         function confirmDelete() {
             const { type, sectionKey, staffIndex, taskIndex } = deleteInfo;
 
@@ -1363,9 +1405,6 @@
             window.saveStaffListToFirestore();
         }
 
-        /**
-         * タスクや時間の変更をデータに保存します。
-         */
         function handleChange(sectionKey, staffIndex, taskIndex, field, value) {
             try {
                 window.staffList[sectionKey][staffIndex].tasks[taskIndex][field] = value;
@@ -1375,87 +1414,313 @@
             }
         }
         
-        /**
-         * タスクの自動割振り
-         */
+        // ★★★ 自動割振り (強化版) ★★★
         function autoAssignTasks(sectionKey, taskListName) {
             const staffInGroup = window.staffList[sectionKey];
-            const numStaff = staffInGroup.length;
-            
-            if (numStaff === 0) {
+            if (staffInGroup.length === 0) {
                 console.warn("スタッフが追加されていません。");
                 return;
             }
-            
-            const allTasks = [...taskLists[taskListName]];
-            const pairTasks = allTasks.filter(t => t.includes('2人'));
-            const singleTasks = allTasks.filter(t => !t.includes('2人'));
-            
-            // 1. 全スタッフのタスクをリセット
+
+            // 1. タスクリストの準備
+            const availableTasks = [...taskLists[taskListName]];
+            const pairTasks = availableTasks.filter(t => t.includes('2人'));
+            let singleTasks = availableTasks.filter(t => !t.includes('2人'));
+
+            // 2. 特殊タスクの準備とタイムスロットのフィルタリング
+            let moneyTaskNeeded = false;
+            let briefingTaskNeeded = false;
+            let timeSlots = [];
+            let timeSlotsStartIndex = 0;
+            const fullTimeSlots = (taskListName === 'open') ? openTimeSlots : closeTimeSlots; // e.g., 07:00 - 10:00 (13 slots)
+
+            // 3. スタッフのタスクをリセット
             staffInGroup.forEach(staff => staff.tasks = []);
             
-            let staffIndex = 0;
-            
-            // 2. ペアタスクを割り当て
-            for (const task of pairTasks) {
-                if (staffIndex + 1 < numStaff) {
-                    staffInGroup[staffIndex].tasks.push({ start: "", end: "", task: task });
-                    staffInGroup[staffIndex + 1].tasks.push({ start: "", end: "", task: task });
-                    staffIndex += 2;
-                } else if (staffIndex < numStaff) {
-                    staffInGroup[staffIndex].tasks.push({ start: "", end: "", task: task });
-                    console.warn(`ペアタスク '${task}' は1人に割り当てられました。`);
+            // 4. 各スタッフの次の空き時間インデックスを追跡
+            let staffNextSlotIndices = new Array(staffInGroup.length).fill(0);
+
+
+            if (taskListName === 'open') {
+                // 「金銭計数」は 'early' (社員) グループのみ
+                if (sectionKey === 'early') {
+                    moneyTaskNeeded = true;
+                }
+                // 「朝礼」は 'early' と 'late' (早番) グループのみ
+                if (sectionKey === 'early' || sectionKey === 'late') {
+                    briefingTaskNeeded = true;
+                }
+                
+                // 朝礼 (09:00-09:15) のインデックスを探す
+                const briefingStartIndex = fullTimeSlots.indexOf('09:00'); // 8
+                const briefingEndIndex = fullTimeSlots.indexOf('09:15'); // 9
+
+                if (briefingStartIndex !== -1 && briefingEndIndex !== -1) {
+                    // ★★★ 修正: 'late' (早番アルバイト) は 9時以降のみ
+                    if (sectionKey === 'early') {
+                        // 社員は 07:00 から
+                        timeSlots = fullTimeSlots.slice(0, briefingStartIndex); // 07:00 - 08:45 (index 0-7)
+                        timeSlots = timeSlots.concat(fullTimeSlots.slice(briefingEndIndex)); // 09:15 - 10:00 (index 9-12)
+                        // timeSlots (early) = 12 slots total (index 0-11)
+                    } else if (sectionKey === 'late') {
+                        // 早番アルバイトは 09:15 から (朝礼 09:00-09:15 は別で入る)
+                        timeSlots = fullTimeSlots.slice(briefingEndIndex); // 09:15 - 10:00 (index 9-12)
+                        // timeSlots (late) = 4 slots total (index 0-3)
+                    }
+                } else {
+                     // 朝礼スロットが見つからない場合 (フォールバック)
+                    if (sectionKey === 'late') {
+                        // ★ 9時より前のスロットを除外
+                        const nineAmIndex = fullTimeSlots.indexOf('09:00');
+                        if (nineAmIndex !== -1) {
+                            timeSlots = fullTimeSlots.slice(nineAmIndex);
+                        } else {
+                            timeSlots = [...fullTimeSlots]; // フォールバック
+                        }
+                    } else {
+                         timeSlots = [...fullTimeSlots];
+                    }
+                }
+
+                // 4b. 固定タスクの割り当て (朝礼)
+                if (briefingTaskNeeded) {
+                    staffInGroup.forEach(staff => {
+                        staff.tasks.push({ 
+                            start: "09:00", 
+                            end: "09:15", 
+                            task: SPECIAL_TASKS.BRIEFING 
+                        });
+                    });
+                }
+                
+                // 5. 特殊タスクの割り当て (金銭計数)
+                // (sectionKey === 'early' の場合のみ moneyTaskNeeded = true)
+                if (moneyTaskNeeded && staffInGroup.length > 0) {
+                    const staff = staffInGroup[0];
+                    const startTime = timeSlots[timeSlotsStartIndex]; // '07:00' (index 0)
+                    // ★ 修正: 30分 (2スロット) 確保
+                    const endTime = timeSlots[timeSlotsStartIndex + 2]; // '07:30' (index 2)
+                    
+                    if(startTime && endTime) { // ★ endTime (index 2) が存在するかチェック
+                        staff.tasks.push({ 
+                            start: startTime, 
+                            end: endTime, 
+                            task: SPECIAL_TASKS.MONEY_COUNT 
+                        });
+                        staffNextSlotIndices[0] += 2; // ★ 最初のスタッフのスロットを2つ進める
+                        timeSlotsStartIndex += 2; // ★ 次のタスク開始インデックスを2つ進める
+                    } else if (startTime && timeSlots[timeSlotsStartIndex + 1]) {
+                        // ★ フォールバック: 30分枠が取れないが15分枠なら取れる場合 (例: 08:45)
+                        const fallbackEndTime = timeSlots[timeSlotsStartIndex + 1];
+                         staff.tasks.push({ 
+                            start: startTime, 
+                            end: fallbackEndTime, 
+                            task: SPECIAL_TASKS.MONEY_COUNT 
+                        });
+                        staffNextSlotIndices[0]++;
+                        timeSlotsStartIndex++;
+                    }
+                }
+                
+            } else { // 閉店作業
+                timeSlots = [...fullTimeSlots]; // 22:45 - 23:30 (4 slots, index 0-3)
+
+                // ★ 閉店用の特別タスクを準備
+                let specialTasksQueue = [];
+                // 1. 立駐は全員 (各グループ1人ずつ)
+                specialTasksQueue.push(SPECIAL_TASKS.PARKING);
+                
+                // 2. 施錠と工具箱は社員のみ
+                if (sectionKey === 'closing_employee') {
+                    specialTasksQueue.push(SPECIAL_TASKS.LOCK_CHECK);
+                    specialTasksQueue.push(SPECIAL_TASKS.TOOLBOX_CHECK);
+                    specialTasksQueue.push(SPECIAL_TASKS.HANDOFF); // ★引継ぎ記載を追加
+                }
+
+                // 5. 特別タスクを割り当て (ラウンドロビン)
+                let staffIndex = 0;
+                for (const task of specialTasksQueue) {
+                    const currentStaffIndex = staffIndex % staffInGroup.length;
+                    const staff = staffInGroup[currentStaffIndex];
+                    
+                    const slotIndex = staffNextSlotIndices[currentStaffIndex];
+                    
+                    const startTime = timeSlots[slotIndex];
+                    const endTime = timeSlots[slotIndex + 1];
+
+                    if (startTime && endTime) {
+                        staff.tasks.push({ start: startTime, end: endTime, task: task });
+                        staffNextSlotIndices[currentStaffIndex]++; // このスタッフの次の空き時間を更新
+                    }
+                    
                     staffIndex++;
                 }
+                
+                // ★ 閉店のペアタスク/シングルタスク用に staffIndex をリセット
+                timeSlotsStartIndex = 0; // 閉店は0から
             }
-            
-            // 3. シングルタスクを全員にラウンドロビンで割り当て
-            staffIndex = 0; // インデックスをリセット
+
+
+            // 6. ペアタスクの割り当て
+            for (const task of pairTasks) {
+                // Find two staff with the minimum slot index
+                let indices = [...staffNextSlotIndices.keys()].sort((a, b) => staffNextSlotIndices[a] - staffNextSlotIndices[b]);
+                
+                if (indices.length < 2) {
+                    // Not enough staff for pairs, assign as single
+                    const staff1 = (indices.length > 0) ? staffInGroup[indices[0]] : staffInGroup[0];
+                    if (staff1) {
+                        const slotIndex = (indices.length > 0) ? staffNextSlotIndices[indices[0]] : 0;
+                        const startTime = timeSlots[slotIndex];
+                        const endTime = timeSlots[slotIndex + 1];
+                        if (startTime && endTime) {
+                            staff1.tasks.push({ start: startTime, end: endTime, task: task });
+                            if(indices.length > 0) staffNextSlotIndices[indices[0]]++;
+                        }
+                    }
+                } else {
+                    const staff1 = staffInGroup[indices[0]];
+                    const staff2 = staffInGroup[indices[1]];
+                    // Assign task at the later of the two start times
+                    const slotIndex = Math.max(staffNextSlotIndices[indices[0]], staffNextSlotIndices[indices[1]]);
+                    const startTime = timeSlots[slotIndex];
+                    const endTime = timeSlots[slotIndex + 1];
+                    
+                    if (startTime && endTime) {
+                        staff1.tasks.push({ start: startTime, end: endTime, task: task });
+                        staff2.tasks.push({ start: startTime, end: endTime, task: task });
+                        staffNextSlotIndices[indices[0]] = slotIndex + 1;
+                        staffNextSlotIndices[indices[1]] = slotIndex + 1;
+                    }
+                }
+            }
+
+
+            // 7. シングルタスクの割り当て (ラウンドロビン)
+            let staffIndex = 0;
             for (const task of singleTasks) {
-                const staffToAssign = staffInGroup[staffIndex % numStaff];
-                staffToAssign.tasks.push({ start: "", end: "", task: task });
-                staffIndex++;
+                // 最小のスロットインデックスを持つスタッフを探す
+                let minSlotIndex = Infinity;
+                let targetStaffIndex = 0;
+                
+                // staffIndexから順番に探す
+                for(let i=0; i<staffInGroup.length; i++) {
+                     let realIndex = (staffIndex + i) % staffInGroup.length;
+                     if (staffNextSlotIndices[realIndex] < minSlotIndex) {
+                         minSlotIndex = staffNextSlotIndices[realIndex];
+                         targetStaffIndex = realIndex;
+                     }
+                }
+
+                const staff = staffInGroup[targetStaffIndex];
+                const slotIndex = staffNextSlotIndices[targetStaffIndex];
+                
+                const startTime = timeSlots[slotIndex];
+                const endTime = timeSlots[slotIndex + 1];
+
+                if (startTime && endTime) {
+                    staff.tasks.push({ start: startTime, end: endTime, task: task });
+                    staffNextSlotIndices[targetStaffIndex]++; // このスタッフの次の空き時間を更新
+                }
+                
+                staffIndex++; // 次のタスクは、(論理的に)次のスタッフから探し始める
             }
             
-            // 4. タスクが0個のスタッフがいないか確認
+            // 8. 残り時間を「自由、個人業務」で埋める (★ 修正: 連続するスロットをまとめる)
+            staffInGroup.forEach((staff, index) => {
+                let firstFreeSlotIndex = staffNextSlotIndices[index];
+
+                if (taskListName === 'open') {
+                    
+                    if (sectionKey === 'early') {
+                        // `timeSlots` (early) = index 0-7 ('07:00'...'08:45') + index 8-11 ('09:15'...'10:00')
+                        const gapIndex = 8; // '09:15' のインデックス
+
+                        // 1. 朝礼前の空きを埋める
+                        if (firstFreeSlotIndex < gapIndex) { // '07:00' - '08:45' の間に空きがある
+                            if (firstFreeSlotIndex < gapIndex -1) { // 0-6 (開始スロット)
+                                 staff.tasks.push({
+                                    start: timeSlots[firstFreeSlotIndex], // 空き開始時間
+                                    end: timeSlots[gapIndex - 1], // '08:45' (index 7)
+                                    task: SPECIAL_TASKS.FREE_TASK
+                                });
+                            } else if (firstFreeSlotIndex === gapIndex - 1) { // 7
+                                // 最後のスロット (08:45) だけが空いている場合
+                                 staff.tasks.push({
+                                    start: timeSlots[firstFreeSlotIndex], // 08:45
+                                    end: fullTimeSlots[briefingStartIndex], // 09:00
+                                    task: SPECIAL_TASKS.FREE_TASK
+                                });
+                            }
+                            // 朝礼後の空きは 09:15 (index 8) から
+                            firstFreeSlotIndex = gapIndex;
+                        }
+                        
+                        // 2. 朝礼後の空きを埋める
+                        if (firstFreeSlotIndex < timeSlots.length) { // 8-11
+                            if (firstFreeSlotIndex < timeSlots.length - 1) { // 8-10 (開始スロット)
+                                staff.tasks.push({
+                                    start: timeSlots[firstFreeSlotIndex], // '09:15' 以降の空き開始時間
+                                    end: timeSlots[timeSlots.length - 1], // '10:00' (index 11)
+                                    task: SPECIAL_TASKS.FREE_TASK
+                                });
+                            } else if (firstFreeSlotIndex === timeSlots.length - 1) { // 11
+                                // 最後のスロット (09:45) だけが空いている場合
+                                 staff.tasks.push({
+                                    start: timeSlots[firstFreeSlotIndex], // 09:45
+                                    end: fullTimeSlots[fullTimeSlots.length - 1], // 10:00
+                                    task: SPECIAL_TASKS.FREE_TASK
+                                });
+                            }
+                        }
+                    
+                    } else if (sectionKey === 'late') {
+                         // `timeSlots` (late) = index 0-3 ('09:15'...'10:00'). 4 slots.
+                         if (firstFreeSlotIndex < timeSlots.length) {
+                             if (firstFreeSlotIndex < timeSlots.length - 1) { // 0-2 (開始スロット)
+                                staff.tasks.push({
+                                    start: timeSlots[firstFreeSlotIndex],
+                                    end: timeSlots[timeSlots.length - 1], // '10:00' (index 3)
+                                    task: SPECIAL_TASKS.FREE_TASK
+                                });
+                            } else if (firstFreeSlotIndex === timeSlots.length - 1) { // 3
+                                // 最後のスロット (09:45) だけが空いている場合
+                                staff.tasks.push({
+                                    start: timeSlots[firstFreeSlotIndex], // 09:45
+                                    end: fullTimeSlots[fullTimeSlots.length - 1], // 10:00
+                                    task: SPECIAL_TASKS.FREE_TASK
+                                });
+                            }
+                        }
+                    }
+
+                } else { // 閉店作業の場合 (ギャップなし)
+                    // `timeSlots` (close) = index 0-3 ('22:45'...'23:30')
+                    if (firstFreeSlotIndex < timeSlots.length) {
+                        if (firstFreeSlotIndex < timeSlots.length - 1) { // 0-2 (開始スロット)
+                            staff.tasks.push({
+                                start: timeSlots[firstFreeSlotIndex],
+                                end: timeSlots[timeSlots.length - 1], // '23:30' (index 3)
+                                task: SPECIAL_TASKS.FREE_TASK
+                            });
+                        } else if (firstFreeSlotIndex === timeSlots.length - 1) { // 3
+                            // 最後のスロット (23:15) だけが空いている場合
+                             staff.tasks.push({
+                                start: timeSlots[firstFreeSlotIndex], // 23:15
+                                end: fullTimeSlots[fullTimeSlots.length - 1], // 23:30
+                                task: SPECIAL_TASKS.FREE_TASK
+                            });
+                        }
+                    }
+                }
+            });
+
+            // 9. タスクが0個のスタッフがいないか確認 (UI表示のため)
             staffInGroup.forEach(staff => {
                 if (staff.tasks.length === 0) {
                     staff.tasks.push({ start: "", end: "", task: "" });
                 }
             });
-            
-            // 5. 時間を割り振る
-            const timeSlots = (taskListName === 'open') ? openTimeSlots : closeTimeSlots;
-            if (timeSlots.length > 1) { 
-                staffInGroup.forEach(staff => {
-                    let nextStartTimeIndex = 0;
-                    staff.tasks.forEach(task => {
-                        if (!task.start && nextStartTimeIndex < timeSlots.length - 1) { 
-                            const startTime = timeSlots[nextStartTimeIndex];
-                            const endTime = timeSlots[nextStartTimeIndex + 1]; 
-                            
-                            task.start = startTime;
-                            task.end = endTime;
-                            
-                            if (task.task.includes('2人')) {
-                                const pairStaff = staffInGroup.find(s => 
-                                    s.name !== staff.name && 
-                                    s.tasks.some(t => t.task === task.task && !t.start) 
-                                );
-                                if (pairStaff) {
-                                    const pairTask = pairStaff.tasks.find(t => t.task === task.task && !t.start);
-                                    if (pairTask) {
-                                        pairTask.start = startTime;
-                                        pairTask.end = endTime;
-                                    }
-                                }
-                            }
-                            
-                            nextStartTimeIndex++; 
-                        }
-                    });
-                });
-            }
             
             updateStaffLists();
             window.saveStaffListToFirestore(); 
@@ -1683,24 +1948,35 @@
                              console.warn("終了時間がスロットと一致しません:", task);
                         }
                         
-                        // ペアタスクか判定
-                        const isPair = task.task.includes('2人');
-                        const pairClass = isPair ? 'pair-task' : '';
-                        
+                        // ★ タスクバーの色分け
+                        let taskClass = '';
+                        if (task.task === SPECIAL_TASKS.BRIEFING) taskClass = 'briefing-task';
+                        else if (task.task === SPECIAL_TASKS.MONEY_COUNT) taskClass = 'money-task';
+                        else if (task.task === SPECIAL_TASKS.FREE_TASK) taskClass = 'free-task';
+                        else if (task.task === SPECIAL_TASKS.PARKING) taskClass = 'parking-task'; 
+                        else if (task.task === SPECIAL_TASKS.LOCK_CHECK) taskClass = 'lock-task'; // ★追加
+                        else if (task.task === SPECIAL_TASKS.TOOLBOX_CHECK) taskClass = 'toolbox-task'; // ★追加
+                        else if (task.task === SPECIAL_TASKS.HANDOFF) taskClass = 'handoff-task'; // ★追加
+                        else if (task.task.includes('2人')) taskClass = 'pair-task';
+
                         bodyHtml += `<td colspan="${colspan}">
-                                         <div class="task-bar ${pairClass}" title="${task.task} (${task.start}-${task.end})">
+                                         <div class="task-bar ${taskClass}" title="${task.task} (${task.start}-${task.end})">
                                              ${task.task}
                                          </div>
-                                     </td>`;
+                                     </td>`; // ★★★ 修正: ここで </td> と ` (バッククォート) を閉じます
                         timeSlotIndex += colspan; // インデックスをジャンプ
                         
-                    } else if (task && !task.end) {
+                    } else if (task && !task.end) { // ★★★ 修正: "if" を "else if" に変更します
                         // 終了時間がないタスク
-                        const isPair = task.task.includes('2人');
-                        const pairClass = isPair ? 'pair-task' : '';
+                        let taskClass = ''; // 色分け
+                        if (task.task === SPECIAL_TASKS.PARKING) taskClass = 'parking-task'; 
+                        else if (task.task === SPECIAL_TASKS.LOCK_CHECK) taskClass = 'lock-task'; // ★追加
+                        else if (task.task === SPECIAL_TASKS.TOOLBOX_CHECK) taskClass = 'toolbox-task'; // ★追加
+                        else if (task.task === SPECIAL_TASKS.HANDOFF) taskClass = 'handoff-task'; // ★追加
+                        else if (task.task.includes('2人')) taskClass = 'pair-task';
                         
                          bodyHtml += `<td>
-                                         <div class="task-bar ${pairClass}" title="${task.task} (${task.start}-?)">
+                                         <div class="task-bar ${taskClass}" title="${task.task} (${task.start}-?)">
                                              ${task.task}
                                          </div>
                                      </td>`;
@@ -1751,9 +2027,16 @@
                 } else {
                     html += '<ul class="divide-y divide-gray-200">';
                     staffTasks.forEach(task => {
-                        const isPair = task.task.includes('2人');
-                        // ★ペアタスクの色分け
-                        const pairClass = isPair ? 'bg-red-50 border-l-red-400' : 'bg-indigo-50 border-l-indigo-400';
+                        
+                        // ★ タスクの背景色クラス
+                        let pairClass = 'bg-indigo-50 border-l-indigo-400'; // Default
+                        if (task.task === SPECIAL_TASKS.BRIEFING) pairClass = 'bg-green-50 border-l-green-400';
+                        else if (task.task === SPECIAL_TASKS.MONEY_COUNT) pairClass = 'bg-yellow-50 border-l-yellow-400';
+                        else if (task.task === SPECIAL_TASKS.FREE_TASK) pairClass = 'bg-gray-50 border-l-gray-400';
+                        else if (task.task === SPECIAL_TASKS.PARKING) pairClass = 'bg-blue-50 border-l-blue-400'; 
+                        else if (task.task === SPECIAL_TASKS.LOCK_CHECK || task.task === SPECIAL_TASKS.TOOLBOX_CHECK || task.task === SPECIAL_TASKS.HANDOFF) pairClass = 'bg-purple-50 border-l-purple-400'; // ★追加
+                        else if (task.task.includes('2人')) pairClass = 'bg-red-50 border-l-red-400';
+                        
                         const timeLabel = (task.start && task.end) ? `${task.start} - ${task.end}` : (task.start ? `${task.start} - ?` : '時間未定');
                         
                         html += `
@@ -1824,4 +2107,6 @@
     </script>
 </body>
 </html>
+
+
 
